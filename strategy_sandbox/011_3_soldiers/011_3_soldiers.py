@@ -323,82 +323,42 @@ bc.plot_data()
 
 
 sf.excel_export(bc.data.tail(10000))
-#found bug in short trailing stop, it was moving up each time price increases, therefore on local downtrend there was good performance
-#need to find best params again on 10-16 week, and test it on 17-23 week
-
-#Find best params 
-df = pd.DataFrame(columns =['combination' ,'accuracy','perf','perf_wo_comm', 'trades' ])
-combination = list()
-acc_list = list()
-perf_list = list()
-perf_w_comm_list = list()
-trades_list = list()
-
-#Iterator of best params tf and pair
-ma_interval = list(range(5,30,5))
-tp_coef = list(range(1,5,1))
-sl_coef = list(range(1,5,1))
-
-all_combinations = list(itertools.product(ma_interval, tp_coef, sl_coef))
-start_time = time.time()
-counter = 1
-for i in all_combinations:
-    bc.calculate_onebar_strategy(ma_interval = i[0], tp_coef=i[1], sl_coef=i[2])
-    df = df.append(
-        {
-        'combination':i,
-        'accuracy':round(len(bc.data.loc[bc.data['pos_result']==1,['pos_result']])/len(bc.data.loc[bc.data['pos_result']!=0,['pos_result']]),2),
-        'perf':(bc.current_balance - bc.initial_balance) / bc.initial_balance * 100,
-        'perf_wo_comm':(bc.current_balance - bc.initial_balance - bc.costs) / bc.initial_balance * 100,
-        'trades':bc.trades
-        },
-        ignore_index=True
-    )
-    print(f'{counter} / {len(all_combinations)} done...')
-    counter += 1
-opt = df.iloc[np.argmax(df.perf_wo_comm)]
-print(75*"-")
-print('The Best combination is: \n{}'.format(opt))
-print(f'time spent on gridsearch in minutes: {round((time.time() - start_time)/60,2)}')
-
-#sf.excel_export(df)
-
 
 
 #IDEA OF THREE CONSECUTIVE BARS
-data = sf.get_stored_data_close('BTCBUSD','1h','2020-01-01','2022-11-28')
+data = sf.get_stored_data_close('BTCBUSD','5m','2020-01-01','2023-01-30')
 # Initialize Bollinger Bands Indicator
 
 
 
-# data['volume_ma'] = data['volume'].rolling(20).mean()
-# data['higher_low'] = np.where(data.low>data.low.shift(1),1,0)
-# data['lower_high'] = np.where(data.high<data.high.shift(1),1,0)
-# data['higher_close'] = np.where(data.close>data.close.shift(1),1,0)
-# data['lower_close'] = np.where(data.close<data.close.shift(1),1,0)
-# data['higher_volume'] = np.where(data.volume>data.volume.shift(1),1,0)
-# data['over_ma_volume'] = np.where(data.volume>data.volume_ma,1,0)
-# data['rng'] = abs(data.high-data.low)
-# data['rng_body'] = abs(data.open-data.close)
-# data['body_size'] = np.where(data.rng_body.div(data.rng)>0.6,1,0)
-# data['returns'] = np.log(data.close.astype(float).div(data.close.astype(float).shift(1)))
-# data['soldier_nr'] = 0
+data['volume_ma'] = data['volume'].rolling(20).mean()
+data['higher_low'] = np.where(data.low>data.low.shift(1),1,0)
+data['lower_high'] = np.where(data.high<data.high.shift(1),1,0)
+data['higher_close'] = np.where(data.close>data.close.shift(1),1,0)
+data['lower_close'] = np.where(data.close<data.close.shift(1),1,0)
+data['higher_volume'] = np.where(data.volume>data.volume.shift(1),1,0)
+data['over_ma_volume'] = np.where(data.volume>data.volume_ma,1,0)
+data['rng'] = abs(data.high-data.low)
+data['rng_body'] = abs(data.open-data.close)
+data['body_size'] = np.where(data.rng_body.div(data.rng)>0.6,1,0)
+data['returns'] = np.log(data.close.astype(float).div(data.close.astype(float).shift(1)))
+data['soldier_nr'] = 0
 
-# for bar in range(len(data)-1):
-#     counter = 0
-#     if data.soldier_nr.iloc[bar-1]==0 and data.higher_low.iloc[bar]==1 and data.higher_close.iloc[bar]==1 and data.body_size.iloc[bar]==1:
-#         data.soldier_nr.iloc[bar] = 1
-#     elif data.soldier_nr.iloc[bar-1] == 1 and data.higher_low.iloc[bar]==1 and data.higher_close.iloc[bar]==1 and data.higher_volume.iloc[bar]==1 and data.body_size.iloc[bar]==1:
-#         data.soldier_nr.iloc[bar] = data.soldier_nr.iloc[bar-1]+1
-#     elif data.soldier_nr.iloc[bar-1] == 2 and data.higher_low.iloc[bar]==1 and data.higher_close.iloc[bar]==1 and data.higher_volume.iloc[bar]==1 and data.body_size.iloc[bar]==1 and data.over_ma_volume.iloc[bar]==1:
-#         data.soldier_nr.iloc[bar] = data.soldier_nr.iloc[bar-1]+1
-#     else:
-#         pass
-# print('done!')
+for bar in range(len(data)-1):
+    counter = 0
+    if data.soldier_nr.iloc[bar-1]==0 and data.higher_low.iloc[bar]==1 and data.higher_close.iloc[bar]==1 and data.body_size.iloc[bar]==1:
+        data.soldier_nr.iloc[bar] = 1
+    elif data.soldier_nr.iloc[bar-1] == 1 and data.higher_low.iloc[bar]==1 and data.higher_close.iloc[bar]==1 and data.body_size.iloc[bar]==1:
+        data.soldier_nr.iloc[bar] = data.soldier_nr.iloc[bar-1]+1
+    elif data.soldier_nr.iloc[bar-1] == 2 and data.higher_low.iloc[bar]==1 and data.higher_close.iloc[bar]==1 and data.body_size.iloc[bar]==1 and data.over_ma_volume.iloc[bar]==1:
+        data.soldier_nr.iloc[bar] = data.soldier_nr.iloc[bar-1]+1
+    else:
+        pass
+print('done!')
 
-# sf.excel_export(data.tail(10000))
+sf.excel_export(data.tail(10000))
 
-# data.soldier_nr.value_counts()
+data.soldier_nr.value_counts()
 
-# data[data['soldier_nr']==3]
+data[data['soldier_nr']==3]
 

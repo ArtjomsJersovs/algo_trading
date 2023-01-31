@@ -1,4 +1,3 @@
-# Decription - strategy for flat market for bounce back from local extremums by using trailing stop on ATR
 
 import os
 import time
@@ -171,7 +170,6 @@ class IterativeBase():
 
         print(75 * "-")
 
-
 class IterativeBacktest(IterativeBase):
 
     # helper method
@@ -208,7 +206,12 @@ class IterativeBacktest(IterativeBase):
             self.sell_instrument(bar, amount = amount)
 
               
-    def calculate_onebar_strategy(self, ma_interval=10, bb_interval=20, body_size =0.8, sl_coef=1, vol_coef = 1):
+    def calculate_bb_strategy(self, bb_interval=30, bb_stdev=3, ma_interval = 15, channel_incr = 0.04 ,tp_coef = 1, sl_coef = 1):
+        #print header
+        # print(75 * "-")
+        # print("Testing the strategy on {} with dataframe {} and deposit of {}".format(self.symbol, self.tf, self.initial_balance))
+        # print(75 * "-")
+
         # reset all parameters
         self.position = 0
         self.trades = 0
@@ -219,105 +222,112 @@ class IterativeBacktest(IterativeBase):
         self.pos_result = 0
         
         self.data['ATR'] = average_true_range(high = self.data.high, low = self.data.low, close = self.data.close, window = ma_interval)
-        indicator_bb = BollingerBands(close=self.data["close"], window=bb_interval, window_dev=2)
+        indicator_bb = BollingerBands(close=self.data["close"], window=bb_interval, window_dev=bb_stdev)
         self.data['close_ma'] = self.data['close'].rolling(ma_interval).mean()
         self.data['bb_bbm'] = indicator_bb.bollinger_mavg()
         self.data['bb_bbh'] = indicator_bb.bollinger_hband()
         self.data['bb_bbl'] = indicator_bb.bollinger_lband()
+        self.data['bb_channel_change'] = np.log(self.data['bb_bbh']-self.data['bb_bbl']).pct_change()
         self.data['volume_ma'] = self.data['volume'].rolling(ma_interval).mean()
         self.data['position'] = 0
         self.data['trailing_stop'] = 0
         self.data['pos_result'] = 0
-        self.data['start_price'] = 0
         #strategy specific
-        self.data['higher_low'] = np.where(self.data.low>self.data.low.shift(1),1,0)
-        self.data['lower_high'] = np.where(self.data.high<self.data.high.shift(1),1,0)
-        self.data['higher_close'] = np.where(self.data.close>self.data.close.shift(1),1,0)
-        self.data['lower_close'] = np.where(self.data.close<self.data.close.shift(1),1,0)
-        self.data['higher_volume'] = np.where(self.data.volume>self.data.volume.shift(1),1,0)
-        self.data['over_ma_volume'] = np.where(self.data.volume>(self.data.volume_ma * vol_coef),1,0)
-        
+        self.data['above_bb_high'] = np.where(self.data.close>self.data.bb_bbh,1,0)
+        self.data['below_bb_low'] = np.where(self.data.close<self.data.bb_bbl,1,0)
+        self.data['channel_incr_threshold'] = np.where(self.data.bb_channel_change>channel_incr,1,0)
+        self.data['over_ma_volume'] = np.where(self.data.volume>self.data.volume_ma,1,0)
         self.data['rng'] = abs(self.data.high-self.data.low)
         self.data['rng_body'] = abs(self.data.open-self.data.close)
-        self.data['body_size'] = np.where(self.data.rng_body.div(self.data.rng)>body_size,1,0)
+        self.data['body_size'] = np.where(self.data.rng_body.div(self.data.rng)>0.8,1,0)
 
+        #self.data.dropna(inplace = True)
         self.data['returns'] = np.log(self.data.close.astype(float).div(self.data.close.astype(float).shift(1)))
         self.data['cumreturns'] = self.data['returns'].cumsum().apply(np.exp)
-        #self.data.dropna(inplace = True)
-        
-        for bar in tqdm(range(len(self.data)-1)): # all bars except of last one
-        #for bar in range(len(self.data)-1):
+
+        #for bar in tqdm(range(len(self.data)-1)): # all bars except of last one
+        for bar in range(len(self.data)-1):
             self.pos_result = 0
         #OPEN POSITIONS
-            if self.position == 0:
-                if self.data.higher_low.iloc[bar]==1 and self.data.higher_close.iloc[bar]==1 and self.data.body_size.iloc[bar]==1 and self.data.over_ma_volume.iloc[bar]==1 and (self.data.bb_bbl.iloc[bar]<self.data.close.iloc[bar]) and (self.data.bb_bbh.iloc[bar]>self.data.close.iloc[bar]):
+            if self.data.channel_incr_threshold.iloc[bar]==1 and self.data.above_bb_high.iloc[bar]==1:
+                if self.position == 0:
                     self.go_long(bar,amount = 'all')
                     self.position = 1
                     self.trailing_stop = self.data.close.iloc[bar] - (self.data.ATR.iloc[bar]*sl_coef)
                     self.start_price = self.data.close.iloc[bar]  
-                    self.data['start_price'].iloc[bar] = self.start_price
                                
-                elif self.data.lower_high.iloc[bar]==1 and self.data.lower_close.iloc[bar]==1 and self.data.body_size.iloc[bar]==1 and self.data.over_ma_volume.iloc[bar]==1 and (self.data.bb_bbh.iloc[bar]>self.data.close.iloc[bar]) and (self.data.bb_bbl.iloc[bar]<self.data.close.iloc[bar]):
+            elif self.data.channel_incr_threshold.iloc[bar]==1 and self.data.below_bb_low.iloc[bar]==1:
+                if self.position == 0:
                     self.go_short(bar,amount = 'all')
                     self.position = -1
                     self.trailing_stop = self.data.close.iloc[bar] + (self.data.ATR.iloc[bar]*sl_coef)
                     self.start_price = self.data.close.iloc[bar]   
-                    self.data['start_price'].iloc[bar] = self.start_price
                     
         #CLOSE POSITIONS
             if self.position == 1:
-                # if self.data.close.iloc[bar] > self.start_price and self.data.close_ma.iloc[bar-1]>self.data.bb_bbm.iloc[bar-1] and self.data.close_ma.iloc[bar]<self.data.bb_bbm.iloc[bar]:
-                #     self.close_long(bar, size='all')
-                #     self.pos_result = 1
-                #     self.position = 0
-                #     self.trailing_stop = 0
-                #     self.start_price = 0
-                
-                if self.trailing_stop > self.data.close.iloc[bar]:
+                if self.data.close.iloc[bar]>((self.data.ATR.iloc[bar]*tp_coef)+self.start_price):
+                    self.close_long(bar, size='all')
+                    self.pos_result = np.where(self.data.close.iloc[bar]>self.start_price,1,-1)
+                    self.position = 0
+                    self.trailing_stop = 0
+                    self.start_price = 0
+
+                #if no actions with position, then pull up stoploss after price climbed over pinbar high + ATR
+                elif (self.start_price-(self.data.ATR.iloc[bar]*sl_coef))>self.data.close.iloc[bar]:
                     self.close_long(bar, size='all')
                     self.pos_result = np.where(self.data.close.iloc[bar]>self.start_price,1,-1)
                     self.position = 0
                     self.trailing_stop = 0
                     self.start_price = 0
                     
-                elif np.sign(self.data.returns.iloc[bar]) == 1 and (self.start_price<self.data.close.iloc[bar]):
-                    self.trailing_stop = self.data.close.iloc[bar] - (self.data.ATR.iloc[bar]*sl_coef)
-                    
-                    
             elif self.position == -1:
-                # if self.data.close.iloc[bar] < self.start_price and self.data.close_ma.iloc[bar-1]<self.data.bb_bbm.iloc[bar-1] and self.data.close_ma.iloc[bar]>self.data.bb_bbm.iloc[bar]:
-                #     self.close_short(bar, size='all')
-                #     self.pos_result = 1
-                #     self.position = 0
-                #     self.trailing_stop = 0
-                #     self.start_price = 0
-                    
-                if self.trailing_stop < self.data.close.iloc[bar]:
-                    self.close_short(bar, size='all')
+                if self.data.close.iloc[bar]<(self.start_price-(self.data.ATR.iloc[bar]*tp_coef)):
+                    self.close_long(bar, size='all')
                     self.pos_result = np.where(self.data.close.iloc[bar]<self.start_price,1,-1)
                     self.position = 0
                     self.trailing_stop = 0
                     self.start_price = 0
-                
-                elif np.sign(self.data.returns.iloc[bar]) == -1 and (self.start_price>self.data.close.iloc[bar]):
-                    self.trailing_stop = self.data.close.iloc[bar] + (self.data.ATR.iloc[bar]*sl_coef)
 
+                #if no actions with position, then pull up stoploss after price climbed over pinbar high + ATR
+                elif (self.start_price+(self.data.ATR.iloc[bar]*sl_coef))<self.data.close.iloc[bar]:
+                    self.close_long(bar, size='all')
+                    self.pos_result = np.where(self.data.close.iloc[bar]<self.start_price,1,-1)
+                    self.position = 0
+                    self.trailing_stop = 0
+                    self.start_price = 0
+            
             self.data['position'].iloc[bar] = self.position
             self.data['trailing_stop'].iloc[bar] = self.trailing_stop
             self.data['pos_result'].iloc[bar] = self.pos_result
         self.close_all(bar+1) # close pos at the last bar       
         
 
-sf.get_stored_data_close('BTCBUSD','5m',"2022-11-01","2023-01-30")
-
+bc = IterativeBacktest("BTCBUSD","2022-11-01","2023-01-30",tf='5m',amount = 1000)
+bc = IterativeBacktest("BTCBUSD","2022-10-24","2022-11-08",tf='5m',amount = 1000)
 bc = IterativeBacktest("BTCBUSD","2020-01-01","2022-11-28",tf='1h',amount = 1000)
-bc = IterativeBacktest("BTCBUSD","2022-11-01","2023-01-30",tf='1m',amount = 1000)
 
-bc.calculate_onebar_strategy(ma_interval=15, bb_interval=30, body_size =0.8, sl_coef=1.25, vol_coef = 1)
+bc.calculate_bb_strategy(bb_interval=30, bb_stdev=3, ma_interval = 15, channel_incr = 0.09 ,tp_coef = 4, sl_coef = 2)
 bc.plot_data()
+#
+# data = sf.get_stored_data_close('BTCBUSD','5m','2020-01-01','2023-01-30')
+# # Initialize Bollinger Bands Indicator
 
-# sf.excel_export(bc.data.tail(10000))
-#Find best params 
+# indicator_bb = BollingerBands(close=data["close"], window=30, window_dev=3)
+# data['bb_bbm'] = indicator_bb.bollinger_mavg()
+# data['bb_bbh'] = indicator_bb.bollinger_hband()
+# data['bb_bbl'] = indicator_bb.bollinger_lband()
+# data['bb_channel_change'] = np.log(data['bb_bbh']-data['bb_bbl']).pct_change()
+
+# data.bb_channel_size.hist()
+# plt.show()
+
+# data['bb_channel_dir'] = np.where(data.bb_channel_size<data.bb_channel_size.shift(1),data.bb_channel_size*(-1),data.bb_channel_size)
+# data['bb_channel_dir_cum'] = np.sign(data.bb_channel_dir.rolling(30).mean())
+# data['bb_channel_dir_pct_ch'] = data['bb_channel_size'].pct_change()
+# sf.excel_export(data.tail(10000))
+
+bc.calculate_bb_strategy(bb_interval=30, bb_stdev=3, ma_interval = 15, channel_incr = 0.08 ,tp_coef = 1, sl_coef = 1)
+
 df = pd.DataFrame(columns =['combination' ,'accuracy','perf','perf_wo_comm', 'trades' ])
 combination = list()
 acc_list = list()
@@ -326,17 +336,18 @@ perf_w_comm_list = list()
 trades_list = list()
 
 #Iterator of best params tf and pair
-ma_interval = list(range(5,25,5))
-bb_interval = list(range(10,40,10))
-body_size = list(np.arange(0.7,0.9,0.1))
-sl_coef = list(np.arange(1,2.25,0.25))
-vol_coef = list(np.arange(1,2,0.25))
+bb_interval = [30]#list(range(15,35,5))
+bb_stdev = list(np.arange(2,4,1))
+ma_interval = [15]#list(np.arange(15,30,5))
+channel_incr = list(np.arange(0.05,0.1,0.01))
+tp_coef = list(np.arange(2,4.25,0.5))
+sl_coef = list(np.arange(2,3.25,0.5))
 
-all_combinations = list(itertools.product(ma_interval, bb_interval, body_size, sl_coef, vol_coef))
+all_combinations = list(itertools.product(bb_interval, bb_stdev, ma_interval, channel_incr, tp_coef, sl_coef))
 start_time = time.time()
 counter = 1
 for i in all_combinations:
-    bc.calculate_onebar_strategy(ma_interval = i[0], bb_interval=i[1], body_size=i[2], sl_coef=i[3], vol_coef=i[4])
+    bc.calculate_bb_strategy(bb_interval = i[0], bb_stdev=i[1], ma_interval=i[2], channel_incr=i[3], tp_coef=i[4], sl_coef=i[5])
     df = df.append(
         {
         'combination':i,
@@ -347,21 +358,11 @@ for i in all_combinations:
         },
         ignore_index=True
     )
-    print(f'{counter} / {len(all_combinations)} done...')
+    print(f'{counter} / {len(all_combinations)} done...') 
     counter += 1
 opt = df.iloc[np.argmax(df.perf_wo_comm)]
 print(75*"-")
 print('The Best combination is: \n{}'.format(opt))
 print(f'time spent on gridsearch in minutes: {round((time.time() - start_time)/60,2)}')
 
-#sf.excel_export(df)
-
-# The Best combination is:
-# combination     (15, 30, 0.7999999999999999, 1.25, 1.0)
-# accuracy                                           0.39
-# perf                                         448.940587
-# perf_wo_comm                                 379.231816
-# trades                                              779
-# Name: 504, dtype: object
-
-
+sf.excel_export(df)
