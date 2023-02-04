@@ -26,3 +26,5 @@ stored_functions.py
 .vscode/
 __pycache__/
 examples/
+.Rproj.user
+.rds
