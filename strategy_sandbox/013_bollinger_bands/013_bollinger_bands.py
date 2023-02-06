@@ -309,7 +309,7 @@ bc = IterativeBacktest("BTCBUSD","2020-01-01","2022-11-28",tf='1h',amount = 1000
 bc.calculate_bb_strategy(bb_interval=30, bb_stdev=3, ma_interval = 15, channel_incr = 0.09 ,tp_coef = 4, sl_coef = 2)
 bc.plot_data()
 #
-# data = sf.get_stored_data_close('BTCBUSD','5m','2020-01-01','2023-01-30')
+data = sf.get_stored_data_close('BTCUSDT','1h','2020-01-01','2023-01-30')
 # # Initialize Bollinger Bands Indicator
 
 # indicator_bb = BollingerBands(close=data["close"], window=30, window_dev=3)

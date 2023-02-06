@@ -26,6 +26,7 @@ data = sf.get_stored_data_close('BTCBUSD', '1h', '2022-06-01','2022-11-28')
 
 #PREPROCESS FEATURES
 
+
 data['open'] = data['open'].pct_change()
 data['high'] = data['high'].pct_change()
 data['low'] = data['low'].pct_change()

@@ -18,12 +18,18 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 from matplotlib import pyplot
 import itertools
+import xgboost as xgb
 plt.style.use("ggplot")
 
 
 pd.set_option('display.max_rows', 100)
 #INIT API
 client, bsm = sf.setup_api_conn_binance()
+loaded_model = xgb.XGBClassifier()
+loaded_model.load_model('strategy_sandbox/012_one_impulse/xgb_bin_58_buy.json')
+buy_model = loaded_model
+loaded_model.load_model('strategy_sandbox/012_one_impulse/xgb_bin_58_sell.json')
+sell_model = loaded_model
 
 class IterativeBase():
     def __init__(self, symbol, start, end, amount, tf = '15m'):
@@ -240,6 +246,17 @@ class IterativeBacktest(IterativeBase):
         self.data['rng'] = abs(self.data.high-self.data.low)
         self.data['rng_body'] = abs(self.data.open-self.data.close)
         self.data['body_size'] = np.where(self.data.rng_body.div(self.data.rng)>body_size,1,0)
+        #inputs for model
+        self.data['open_pct'] = self.data['open'].pct_change()*100
+        self.data['high_pct'] = self.data['high'].pct_change()*100
+        self.data['low_pct'] = self.data['low'].pct_change()*100
+        self.data['close_pct'] = self.data['close'].pct_change()*100
+        self.data['pctB'] = indicator_bb.bollinger_pband()
+        self.data['open_pct_lag_1'] = self.data['open_pct'].shift(1)
+        self.data['close_pct_lag_1'] = self.data['close_pct'].shift(1)
+        self.data['high_pct_lag_1'] = self.data['high_pct'].shift(1)
+        self.data['low_pct_lag_1'] = self.data['low_pct'].shift(1)
+        self.data['low_pct_lag_2'] = self.data['open_pct'].shift(2)
 
         self.data['returns'] = np.log(self.data.close.astype(float).div(self.data.close.astype(float).shift(1)))
         self.data['cumreturns'] = self.data['returns'].cumsum().apply(np.exp)
@@ -248,16 +265,22 @@ class IterativeBacktest(IterativeBase):
         for bar in tqdm(range(len(self.data)-1)): # all bars except of last one
         #for bar in range(len(self.data)-1):
             self.pos_result = 0
+        #predict probabilities
+            buy_prob = buy_model.predict_proba(self.data[['pctB', 'low_pct', 'high_pct', 'high_pct_lag_1', 'close_pct_lag_1','low_pct_lag_2', 'open_pct', 'low_pct_lag_1', 'open_pct_lag_1']].iloc[[bar]])
+            sell_prob = sell_model.predict_proba(self.data[['pctB', 'low_pct', 'high_pct', 'high_pct_lag_1', 'close_pct_lag_1','low_pct_lag_2', 'open_pct', 'low_pct_lag_1', 'open_pct_lag_1']].iloc[[bar]])
+            buy_model_signal = buy_prob[0][1]>0.52 and sell_prob[0][1]<=0.52
+            sell_model_signal = sell_prob[0][1]>0.52 and buy_prob[0][1]<=0.52
+
         #OPEN POSITIONS
             if self.position == 0:
-                if self.data.higher_low.iloc[bar]==1 and self.data.higher_close.iloc[bar]==1 and self.data.body_size.iloc[bar]==1 and self.data.over_ma_volume.iloc[bar]==1 and (self.data.bb_bbl.iloc[bar]<self.data.close.iloc[bar]) and (self.data.bb_bbh.iloc[bar]>self.data.close.iloc[bar]):
+                if self.data.higher_low.iloc[bar]==1 and self.data.higher_close.iloc[bar]==1 and self.data.body_size.iloc[bar]==1 and self.data.over_ma_volume.iloc[bar]==1 and (self.data.bb_bbl.iloc[bar]<self.data.close.iloc[bar]) and (self.data.bb_bbh.iloc[bar]>self.data.close.iloc[bar]) and buy_model_signal == True:
                     self.go_long(bar,amount = 'all')
                     self.position = 1
                     self.trailing_stop = self.data.close.iloc[bar] - (self.data.ATR.iloc[bar]*sl_coef)
                     self.start_price = self.data.close.iloc[bar]  
                     self.data['start_price'].iloc[bar] = self.start_price
                                
-                elif self.data.lower_high.iloc[bar]==1 and self.data.lower_close.iloc[bar]==1 and self.data.body_size.iloc[bar]==1 and self.data.over_ma_volume.iloc[bar]==1 and (self.data.bb_bbh.iloc[bar]>self.data.close.iloc[bar]) and (self.data.bb_bbl.iloc[bar]<self.data.close.iloc[bar]):
+                elif self.data.lower_high.iloc[bar]==1 and self.data.lower_close.iloc[bar]==1 and self.data.body_size.iloc[bar]==1 and self.data.over_ma_volume.iloc[bar]==1 and (self.data.bb_bbh.iloc[bar]>self.data.close.iloc[bar]) and (self.data.bb_bbl.iloc[bar]<self.data.close.iloc[bar]) and sell_model_signal == True:
                     self.go_short(bar,amount = 'all')
                     self.position = -1
                     self.trailing_stop = self.data.close.iloc[bar] + (self.data.ATR.iloc[bar]*sl_coef)
@@ -308,7 +331,7 @@ class IterativeBacktest(IterativeBase):
         self.close_all(bar+1) # close pos at the last bar       
         
 
-sf.get_stored_data_close('BTCBUSD','5m',"2022-11-01","2023-01-30")
+sf.get_stored_data_close('BTCBUSD','1h',"2020-01-01","2022-11-28")
 
 bc = IterativeBacktest("BTCBUSD","2020-01-01","2022-11-28",tf='1h',amount = 1000)
 bc = IterativeBacktest("BTCBUSD","2022-11-01","2023-01-30",tf='1m',amount = 1000)
@@ -364,4 +387,16 @@ print(f'time spent on gridsearch in minutes: {round((time.time() - start_time)/6
 # trades                                              779
 # Name: 504, dtype: object
 
+data = bc.data
+buy_prob = buy_model.predict_proba(data[['pctB', 'low_pct', 'high_pct', 'high_pct_lag_1', 'close_pct_lag_1','low_pct_lag_2', 'open_pct', 'low_pct_lag_1', 'open_pct_lag_1']].iloc[[40]])
+sell_prob = buy_model.predict_proba(data[['pctB','low_pct','high_pct','high_pct_lag_1','close_pct_lag_1','low_pct_lag_2','open_pct','low_pct_lag_1','open_pct_lag_1']].values[1,])
 
+x = data[['pctB','low_pct','high_pct','high_pct_lag_1','close_pct_lag_1','low_pct_lag_2','open_pct','low_pct_lag_1','open_pct_lag_1']]
+x.loc[25,]
+
+buy_model.feature_names_in_
+
+buy_model_signal = buy_prob[1]>0.52 and sell_prob[1]<=0.52
+
+
+buy_prob[1][1]
