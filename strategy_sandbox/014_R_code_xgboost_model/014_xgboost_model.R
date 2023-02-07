@@ -57,7 +57,7 @@ ema = ema %>% mutate(ema_diff = ema_15-ema_40,
 data_d = cbind(data_d, bb, ema)
 data_d = data_d %>% select(-open, -low, -high)
 
-snp_data = snp_data %>% mutate(Date = as.Date(snp_data$Date,format = "%m/%d/%y")) %>% filter(Date>=as.Date('2019-09-19'))
+snp_data = snp_data %>% mutate(Date = as.Date(snp_data$Date,format = "%m/%d/%y")) %>% filter(Date>=as.Date('2019-09-19')) %>% arrange(Date)
 names(snp_data) = paste0('snp_',names(snp_data))
 
 snp_data = snp_data %>% 
@@ -80,7 +80,7 @@ lags = 5
 for (lag in seq(1,lags)){
   for (col in names(data_d_proc %>% select(close_pct, open_pct, high_pct, low_pct))){
     col_name = paste0(col,'_lag_',lag)
-    data_d_proc[[col_name]] = lag(data_d_proc[[col]]) 
+    data_d_proc[[col_name]] = lag(data_d_proc[[col]],lag) 
   }
 }
 print('done')
@@ -105,22 +105,24 @@ params <- list(
   #nrounds = 1000,
   early_stopping_round = 100,
   eta = 0.005,
-  subsample = 0.75, 
-  colsample_bytree = 0.9,
-  max_depth = 5, #7, 
-  min_child_weight = 5 #5
+  subsample = 0.5, 
+  colsample_bytree = 0.75,
+  max_depth = 2, #7, 
+  min_child_weight = 4 #5
 )
 
 model = train_model_get_scored_apps_and_model_metrics(
   train_set_df=train_set,
   hold_out_set_df=test_set,
   features=names(select(train_set, -timestamp, -response, -modelling_subset, -random_number, -close_pct)),
-  nround_par=100, #710,
+  nround_par=6, #710,
   params=params,
   target_col_name_txt='response', score_col_name='score', exp_pd_col_name='exp_pd')
 
-model$scored_df$exp_bin_result = case_when(model$scored_df$exp_pd>0.545~1,T~0)
-model$scored_df$exp_bin_result = case_when(model$scored_df$exp_pd<0.465~-1,T~model$scored_df$exp_bin_result)
+  hist(model$scored_df$exp_pd)
+
+model$scored_df$exp_bin_result = case_when(model$scored_df$exp_pd>0.50~1,T~0)
+#model$scored_df$exp_bin_result = case_when(model$scored_df$exp_pd<0.465~-1,T~model$scored_df$exp_bin_result)
 
 X = table(model$scored_df$response,model$scored_df$exp_bin_result)
 acc_1 = X[2,2]/(X[1,2]+X[2,2])
@@ -129,7 +131,36 @@ print(X)
 print(acc_1)
 print(acc_0)
 
+all_model_inputs = names(select(train_set, -timestamp, -response, -modelling_subset, -random_number, -close_pct))
+
+
+tune_params <- list(
+  nrounds = 1000,
+  early_stopping_rounds = 100,
+  eta = 0.001, 
+  subsample = c(0.50,0.75, 0.9), 
+  colsample_bytree = c(0.75, 0.9), 
+  max_depth = c(2,3,4,5),
+  min_child_weight = c(4,6,8,12,15)
+)
+gridSize(tune_params)
 
 
 
+model_grid_search_params = grid_search_gradient_boosting(
+  train.frame = train_set %>% select(response, one_of(all_model_inputs)), 
+  param = tune_params, 
+  set_seed = 1000, 
+  #backup_file_name = 'grid_param_search',
+  n.runs = 200, 
+  parallel_search = T, 
+  logical_cores = T, 
+  use_cores = 12, #8,
+  #grid_search_stopping_iter=20,
+  #features_permutation_number = 50, #200, #200, #300 
+  #export_top_iterations_vars = 600, 
+  #feature_subset_number_detection = T, 
+  # feature_number_detection_vals = c(15)
+)
+export_grid_results_to_excel(model_grid_search_params)
 

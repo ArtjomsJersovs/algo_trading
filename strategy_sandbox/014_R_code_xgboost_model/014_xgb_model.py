@@ -53,15 +53,14 @@ for lag in range(1, lags + 1):
         cols.append(subcol_name)
         
 data.dropna(inplace = True)
-data['target'] = np.where(data.close.shift(-1)>data.close,1,0)
+data['target'] = np.where(data.close.shift(-1)<data.close,1,0)
 data = data[['target','pctB','low_pct','high_pct','high_pct_lag_1','close_pct_lag_1','low_pct_lag_2','open_pct','low_pct_lag_1','open_pct_lag_1']].copy()
 
 loaded_model = xgb.XGBClassifier()
 loaded_model.load_model('strategy_sandbox/012_one_impulse/xgb_bin_58_buy.json')
 buy_model = loaded_model
 #sf.excel_export(data)
-X = buy_model.predict_proba(data[['pctB','low_pct','high_pct','high_pct_lag_1','close_pct_lag_1','low_pct_lag_2','open_pct','low_pct_lag_1','open_pct_lag_1']].values[-1:,])
-X[:,1][0]
+
 ## SPLIT ON TRAIN AND TEST
 times = sorted(data.index.values)
 last_20pct = sorted(data.index.values)[-int(0.2*len(times))] # Last 10% of series
