@@ -18,7 +18,7 @@ def excel_export(df, name='temp_file', size=100000):
     df.head(int(size)).to_excel(str(name) +".xlsx") 
     subprocess.run(["C:/Program Files/Microsoft Office/root/Office16/EXCEL.exe", str(name) +".xlsx"])
 
-
+client, bsm = sf.setup_api_conn_binance()
 
 class Backtester():
     def __init__(self, symbol, fast_ma, slow_ma, smooth, start, end, tf = '15m'):
@@ -42,7 +42,7 @@ class Backtester():
         return rep.format(self.symbol, self.slow_ma, self.fast_ma, self.smooth, self.start, self.end)
 
     def preprocess_data(self):
-        filename = str(os.getcwd())+'\\datasets\\%s-1m-data.csv' % ('LTCUSDT')
+        filename = str(os.getcwd())+'\\strategy_sandbox\\datasets\\%s-5m-data.csv' % (self.symbol)
 
         
         if os.path.isfile(filename):
@@ -83,7 +83,7 @@ class Backtester():
         #****************************************************
 
     def test_strategy(self):
-        data = test2.data
+        data = self.data
         data['position'] = np.where((data.MACD>0) & (np.sign(data.MACD_hist)>np.sign(data.MACD_hist.shift(1))), 1, np.nan)
         data['trades'] = data['position'].fillna(0).cumsum()
         data['position'] = np.where((np.sign(data.MACD_hist)<np.sign(data.MACD_hist.shift(1))), 0, data.position)
@@ -182,15 +182,18 @@ opt = best_combinations.iloc[np.argmax(best_combinations.performance)]
 print(75*"-")
 print('The Best combination is: \n{}'.format(opt))
 
+sf.get_stored_data_close('ATOMUSDT','5m',"2022-11-01","2023-02-01")
+sf.get_stored_data_close('LTCUSDT','5m',"2022-11-01","2023-02-01")
 
 
-test = Backtester('ATOMUSDT',30,20,5,'2021-01-01','2022-02-01', '5m')
+
+test = Backtester('ATOMUSDT',30,20,5,"2022-11-01","2023-02-01", '5m')
 test2 = Backtester('LTCUSDT',15,10,3,'2022-03-09','2022-03-31', '5m')
 test3 = Backtester('BTCUSDT',40,30,13,'2021-01-01','2022-02-01', '4h')
 
-test2.test_strategy()
+test.test_strategy()
 #test2.plot_strategy()
-test2.plot_results()
+test.plot_results()
 #sf.excel_export(test2.data)
 
 

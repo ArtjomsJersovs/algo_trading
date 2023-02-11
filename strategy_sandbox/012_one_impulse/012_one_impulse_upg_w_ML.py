@@ -268,24 +268,10 @@ class IterativeBacktest(IterativeBase):
         #predict probabilities
             buy_prob = buy_model.predict_proba(self.data[['pctB', 'low_pct', 'high_pct', 'high_pct_lag_1', 'close_pct_lag_1','low_pct_lag_2', 'open_pct', 'low_pct_lag_1', 'open_pct_lag_1']].iloc[[bar]])
             sell_prob = sell_model.predict_proba(self.data[['pctB', 'low_pct', 'high_pct', 'high_pct_lag_1', 'close_pct_lag_1','low_pct_lag_2', 'open_pct', 'low_pct_lag_1', 'open_pct_lag_1']].iloc[[bar]])
-            buy_model_signal = buy_prob[0][1]>0.52 
+            buy_model_signal = buy_prob[0][1]>0.52
             sell_model_signal = sell_prob[0][1]>0.52 
 
-        #OPEN POSITIONS
-            if self.position == 0:
-                if self.data.higher_low.iloc[bar]==1 and self.data.higher_close.iloc[bar]==1 and self.data.body_size.iloc[bar]==1 and self.data.over_ma_volume.iloc[bar]==1 and (self.data.bb_bbl.iloc[bar]<self.data.close.iloc[bar]) and (self.data.bb_bbh.iloc[bar]>self.data.close.iloc[bar]) and buy_model_signal == True:
-                    self.go_long(bar,amount = 'all')
-                    self.position = 1
-                    self.trailing_stop = self.data.close.iloc[bar] - (self.data.ATR.iloc[bar]*sl_coef)
-                    self.start_price = self.data.close.iloc[bar]  
-                    self.data['start_price'].iloc[bar] = self.start_price
-                               
-                elif self.data.lower_high.iloc[bar]==1 and self.data.lower_close.iloc[bar]==1 and self.data.body_size.iloc[bar]==1 and self.data.over_ma_volume.iloc[bar]==1 and (self.data.bb_bbh.iloc[bar]>self.data.close.iloc[bar]) and (self.data.bb_bbl.iloc[bar]<self.data.close.iloc[bar]) and sell_model_signal == True:
-                    self.go_short(bar,amount = 'all')
-                    self.position = -1
-                    self.trailing_stop = self.data.close.iloc[bar] + (self.data.ATR.iloc[bar]*sl_coef)
-                    self.start_price = self.data.close.iloc[bar]   
-                    self.data['start_price'].iloc[bar] = self.start_price
+
                     
         #CLOSE POSITIONS
             if self.position == 1:
@@ -296,18 +282,15 @@ class IterativeBacktest(IterativeBase):
                 #     self.trailing_stop = 0
                 #     self.start_price = 0
                 
-                if self.trailing_stop > self.data.close.iloc[bar]:
-                    self.close_long(bar, size='all')
-                    self.pos_result = np.where(self.data.close.iloc[bar]>self.start_price,1,-1)
-                    self.position = 0
-                    self.trailing_stop = 0
-                    self.start_price = 0
+                self.close_long(bar, size='all')
+                self.pos_result = np.where(self.data.close.iloc[bar]>self.start_price,1,-1)
+                self.position = 0
+                self.trailing_stop = 0
+                self.start_price = 0
                     
-                elif np.sign(self.data.returns.iloc[bar]) == 1 and (self.start_price<self.data.close.iloc[bar]):
-                    self.trailing_stop = self.data.close.iloc[bar] - (self.data.ATR.iloc[bar]*sl_coef)
+    
                     
-                    
-            elif self.position == -1:
+            if self.position == -1:
                 # if self.data.close.iloc[bar] < self.start_price and self.data.close_ma.iloc[bar-1]<self.data.bb_bbm.iloc[bar-1] and self.data.close_ma.iloc[bar]>self.data.bb_bbm.iloc[bar]:
                 #     self.close_short(bar, size='all')
                 #     self.pos_result = 1
@@ -315,15 +298,28 @@ class IterativeBacktest(IterativeBase):
                 #     self.trailing_stop = 0
                 #     self.start_price = 0
                     
-                if self.trailing_stop < self.data.close.iloc[bar]:
-                    self.close_short(bar, size='all')
-                    self.pos_result = np.where(self.data.close.iloc[bar]<self.start_price,1,-1)
-                    self.position = 0
-                    self.trailing_stop = 0
-                    self.start_price = 0
+                self.close_short(bar, size='all')
+                self.pos_result = np.where(self.data.close.iloc[bar]<self.start_price,1,-1)
+                self.position = 0
+                self.trailing_stop = 0
+                self.start_price = 0
                 
-                elif np.sign(self.data.returns.iloc[bar]) == -1 and (self.start_price>self.data.close.iloc[bar]):
+         #OPEN POSITIONS
+            if self.position == 0:
+                if buy_model_signal == True and self.data.lower_close.iloc[bar]==1 and self.data.higher_volume.iloc[bar]==1:
+                    self.go_long(bar,amount = 'all')
+                    self.position = 1
+                    self.trailing_stop = self.data.close.iloc[bar] - (self.data.ATR.iloc[bar]*sl_coef)
+                    self.start_price = self.data.close.iloc[bar]  
+                    self.data['start_price'].iloc[bar] = self.start_price
+                               
+                elif sell_model_signal == True and self.data.higher_close.iloc[bar]==1 and self.data.higher_volume.iloc[bar]==1:
+                    self.go_short(bar,amount = 'all')
+                    self.position = -1
                     self.trailing_stop = self.data.close.iloc[bar] + (self.data.ATR.iloc[bar]*sl_coef)
+                    self.start_price = self.data.close.iloc[bar]   
+                    self.data['start_price'].iloc[bar] = self.start_price
+                
 
             self.data['position'].iloc[bar] = self.position
             self.data['trailing_stop'].iloc[bar] = self.trailing_stop
@@ -333,7 +329,7 @@ class IterativeBacktest(IterativeBase):
 
 sf.get_stored_data_close('BTCBUSD','1h',"2020-01-01","2022-11-28")
 
-bc = IterativeBacktest("BTCBUSD","2020-01-01","2022-11-28",tf='1h',amount = 1000)
+bc = IterativeBacktest("BTCBUSD","2022-09-01","2023-01-30",tf='1h',amount = 1000)
 bc = IterativeBacktest("BTCBUSD","2022-11-01","2023-01-30",tf='1m',amount = 1000)
 
 bc.calculate_onebar_strategy(ma_interval=15, bb_interval=30, body_size =0.8, sl_coef=1.25, vol_coef = 1)

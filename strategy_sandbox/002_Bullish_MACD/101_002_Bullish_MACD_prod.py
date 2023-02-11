@@ -11,6 +11,7 @@ from binance import ThreadedWebsocketManager
 from binance.client import Client
 from pandas.core.tools.datetimes import to_datetime
 from ta.trend import MACD
+import stored_functions as sf
 import json
 
 pd.set_option('display.max_rows', 100)
@@ -26,9 +27,7 @@ binance_api_secret = credentials['binance_api_secret']
 ts_conf='telegram-send.conf'
 ### CONSTANTS
 
-client = Client(api_key=binance_api_key, api_secret=binance_api_secret)
-
-bsm = ThreadedWebsocketManager()
+client, bsm = sf.setup_api_conn_binance()
 
 class Trader():
 
