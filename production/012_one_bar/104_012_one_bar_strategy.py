@@ -18,7 +18,7 @@ import ta.momentum as tm
 import json
 import stored_functions as sf
 import telegram_send as ts
-ts_conf='telegram-send.conf'
+ts_conf=r'C:\Users\Administrator\Documents\algo_trading\telegram-send.conf'
 # with open("api_keys.json") as file:
 #     keys = json.load(file)
 # ### API
@@ -62,8 +62,8 @@ class Trader():
         self.data = self.get_historical_data().assign(order_price=np.nan, order_qty=np.nan,trade_size_usd=np.nan)
         self.bot_start_date = pd.to_datetime(pd.Timestamp.utcnow().tz_localize(None)).strftime("%d%b%Y_%H%M%S")
         #for server
-        self.bot_balance_filename = 'C:/Users/Administrator/Documents/AJbots/production/012_one_bar/104_012_one_bar_bal.csv'
-        self.file_name = 'C:/Users/Administrator/Documents/AJbots/production/012_one_bar/104_012_one_bar_tradelog_{}.csv'.format(self.bot_start_date)
+        self.bot_balance_filename = 'C:/Users/Administrator/Documents/algo_trading/production/012_one_bar/104_012_one_bar_bal.csv'
+        self.file_name = 'C:/Users/Administrator/Documents/algo_trading/production/012_one_bar/104_012_one_bar_tradelog_{}.csv'.format(self.bot_start_date)
         #for local machine
         #self.bot_balance_filename = 'C:/Users/artjoms.jersovs/github/AJbots/production/012_one_bar/104_012_one_bar_bal.csv'
         #self.file_name = 'C:/Users/artjoms.jersovs/github/AJbots/production/012_one_bar/104_012_one_bar_tradelog_{}.csv'.format(self.bot_start_date)
@@ -272,7 +272,7 @@ if __name__ == "__main__":
 # client.get_asset_balance('USDT')
 # client.get_asset_balance('LINK')
 #bot.trades_data.to_csv('C:/Users/Administrator/Documents/GitHub/AJbots/strategy_sandbox/test.csv')
-#py Documents\GitHub\AJbots\production\007_flat_false_breakout\103_007_flat_false_breakout_strategy.py
+#py C:\Users\Administrator\Documents\algo_trading\production\012_one_bar\104_012_one_bar_strategy.py
 #bot.tick_data
 
 # bot.test_order='long'
