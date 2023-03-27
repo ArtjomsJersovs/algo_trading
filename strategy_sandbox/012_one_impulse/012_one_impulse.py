@@ -308,9 +308,9 @@ class IterativeBacktest(IterativeBase):
         self.close_all(bar+1) # close pos at the last bar       
         
 
-sf.get_stored_data_close('BTCBUSD','5m',"2022-11-01","2023-01-30")
+sf.get_stored_data_close('BTCBUSD','1h',"2022-11-01","2023-03-23")
 
-bc = IterativeBacktest("BTCBUSD","2020-01-01","2022-11-28",tf='1h',amount = 1000)
+bc = IterativeBacktest("BTCBUSD","2022-11-01","2023-03-23",tf='1h',amount = 1000)
 bc = IterativeBacktest("BTCBUSD","2022-11-01","2023-01-30",tf='1m',amount = 1000)
 
 bc.calculate_onebar_strategy(ma_interval=15, bb_interval=30, body_size =0.8, sl_coef=1.25, vol_coef = 1)
@@ -364,3 +364,24 @@ print(f'time spent on gridsearch in minutes: {round((time.time() - start_time)/6
 # trades                                              779
 # Name: 504, dtype: object
 
+x = dict({
+	"RECOMMENDATION": "NEUTRAL",
+	"BUY": 1,
+	"SELL": 2,
+	"NEUTRAL": 8,
+	"COMPUTE": {
+		"RSI": "NEUTRAL",
+		"STOCH.K": "NEUTRAL",
+		"CCI": "NEUTRAL",
+		"ADX": "NEUTRAL",
+		"AO": "NEUTRAL",
+		"Mom": "SELL",
+		"MACD": "BUY",
+		"Stoch.RSI": "NEUTRAL",
+		"W%R": "NEUTRAL",
+		"BBP": "SELL",
+		"UO": "NEUTRAL"
+	}
+})
+
+x['COMPUTE'].keys()

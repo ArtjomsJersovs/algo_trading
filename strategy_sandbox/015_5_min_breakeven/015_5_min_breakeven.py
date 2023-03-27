@@ -1,5 +1,3 @@
-# Decription - strategy for flat market for bounce back from local extremums by using trailing stop on ATR
-
 import os
 import time
 import datetime as dt
@@ -19,16 +17,58 @@ import matplotlib.pyplot as plt
 from matplotlib import pyplot
 import itertools
 import xgboost as xgb
+from ast import Index
 plt.style.use("ggplot")
 
 
 pd.set_option('display.max_rows', 100)
 #INIT API
 client, bsm = sf.setup_api_conn_binance()
-buy_model = xgb.XGBClassifier()
-buy_model.load_model('strategy_sandbox/012_one_impulse/xgb_bin_58_buy.json')
-sell_model = xgb.XGBClassifier()
-sell_model.load_model('strategy_sandbox/012_one_impulse/xgb_bin_58_sell.json')
+
+sf.get_all_binance('BTCBUSD', '5m', save=True)
+# filename = str(os.getcwd())+'\\strategy_sandbox\\datasets\\BTCBUSD-5m-data.csv' 
+# raw = pd.read_csv(filename)
+# raw['timestamp'] = pd.to_datetime(raw['timestamp'])
+# raw.set_index('timestamp', inplace=True)
+# raw['ATR'] = average_true_range(high = raw.high, low = raw.low, close = raw.close, window = 15)
+# raw['month'] = pd.DatetimeIndex(raw.index).month
+# raw['atr_to_price_ratio'] = raw['ATR']/raw['close']
+# df = raw.copy()
+
+# sf.get_stored_data_close('BTCBUSD','1h',"2020-01-01","2022-11-28")
+
+# df.groupby(['month']).ATR.describe()
+#         count       mean        std        min        25%        50%        75%         max
+# month
+# 1      8928.0  35.492061  25.027949   3.162617  15.008896  30.582337  48.265758  175.733918
+# 2      8064.0  43.750409  22.597319   7.833074  27.508615  37.768233  55.390842  148.333925
+# 3      6023.0  63.794312  39.244365  11.033762  32.864143  55.019987  87.272289  275.371851
+# 10     8928.0  32.579469  15.352405   0.000000  21.889042  29.714862  40.602386  118.626729
+# 11     8640.0  43.908058  37.051062   9.142804  22.961354  31.613394  48.803915  343.508883
+# 12     8928.0  17.930087   9.832474   4.119455  11.587079  15.913845  21.693625  107.035028
+# >>>
+# df.groupby(['month']).atr_to_price_ratio.describe()
+#         count      mean       std       min       25%       50%       75%       max
+# month
+# 1      8928.0  0.001690  0.001121  0.000187  0.000855  0.001466  0.002206  0.008411
+# 2      8064.0  0.001865  0.000932  0.000359  0.001190  0.001619  0.002364  0.005939
+# 3      6027.0  0.002641  0.001526  0.000494  0.001474  0.002341  0.003493  0.010673
+# 10     8928.0  0.001654  0.000768  0.000000  0.001125  0.001512  0.002055  0.006473
+# 11     8640.0  0.002514  0.002139  0.000552  0.001259  0.001809  0.002873  0.018894
+# 12     8928.0  0.001055  0.000566  0.000245  0.000687  0.000939  0.001277  0.005976
+# >>>
+#commission for trade is 0.0015
+#mean 5 min bar atr is 0.001857
+# df.atr_to_price_ratio.describe()
+#Min loss will be 0.00335
+#with 50% accuracy 
+#profit should be 0.00485 with loss 0.0019
+#roughly profit ratio should be 2.6 for breakeven
+
+#profit ratio 3:1 will earn of average 0.085% per win trade, 0.0425% per every trade
+# ((3 * 0.0019) - 0.00485)*100
+#in order to earn 15% monthly its needed to execute 12 trades per day with 3:1 profit ratio and 50% accuracy.
+# 15/0.0425/30
 
 
 class IterativeBase():
@@ -214,7 +254,7 @@ class IterativeBacktest(IterativeBase):
             self.sell_instrument(bar, amount = amount)
 
               
-    def calculate_onebar_strategy(self, ma_interval=10, bb_interval=20, body_size =0.8, sl_coef=1, vol_coef = 1):
+    def calculate_test_strategy(self, ma_interval=10, bb_interval=20, body_size =0.8, sl_coef=0.0019, tp_coef = 0.005):
         # reset all parameters
         self.position = 0
         self.trades = 0
@@ -226,38 +266,23 @@ class IterativeBacktest(IterativeBase):
         
         self.data['ATR'] = average_true_range(high = self.data.high, low = self.data.low, close = self.data.close, window = ma_interval)
         indicator_bb = BollingerBands(close=self.data["close"], window=bb_interval, window_dev=2)
-        self.data['close_ma'] = self.data['close'].rolling(ma_interval).mean()
-        self.data['bb_bbm'] = indicator_bb.bollinger_mavg()
-        self.data['bb_bbh'] = indicator_bb.bollinger_hband()
-        self.data['bb_bbl'] = indicator_bb.bollinger_lband()
-        self.data['volume_ma'] = self.data['volume'].rolling(ma_interval).mean()
         self.data['position'] = 0
         self.data['trailing_stop'] = 0
         self.data['pos_result'] = 0
         self.data['start_price'] = 0
         #strategy specific
+        self.data['volume_ma'] = self.data['volume'].rolling(ma_interval).mean()
         self.data['higher_low'] = np.where(self.data.low>self.data.low.shift(1),1,0)
         self.data['lower_high'] = np.where(self.data.high<self.data.high.shift(1),1,0)
         self.data['higher_close'] = np.where(self.data.close>self.data.close.shift(1),1,0)
         self.data['lower_close'] = np.where(self.data.close<self.data.close.shift(1),1,0)
-        self.data['higher_volume'] = np.where(self.data.volume>self.data.volume.shift(1),1,0)
-        self.data['over_ma_volume'] = np.where(self.data.volume>(self.data.volume_ma * vol_coef),1,0)
-        
+        self.data['over_ma_volume'] = np.where(self.data.volume>self.data.volume_ma,1,0)
         self.data['rng'] = abs(self.data.high-self.data.low)
         self.data['rng_body'] = abs(self.data.open-self.data.close)
-        self.data['body_size'] = np.where(self.data.rng_body.div(self.data.rng)>body_size,1,0)
-        #inputs for model
-        self.data['open_pct'] = self.data['open'].pct_change()*100
-        self.data['high_pct'] = self.data['high'].pct_change()*100
-        self.data['low_pct'] = self.data['low'].pct_change()*100
-        self.data['close_pct'] = self.data['close'].pct_change()*100
-        self.data['pctB'] = indicator_bb.bollinger_pband()
-        self.data['open_pct_lag_1'] = self.data['open_pct'].shift(1)
-        self.data['close_pct_lag_1'] = self.data['close_pct'].shift(1)
-        self.data['high_pct_lag_1'] = self.data['high_pct'].shift(1)
-        self.data['low_pct_lag_1'] = self.data['low_pct'].shift(1)
-        self.data['low_pct_lag_2'] = self.data['open_pct'].shift(2)
-
+        self.data['body_size'] = np.where(self.data.rng_body.div(self.data.rng)>0.8,1,0)
+        self.data['soldier_nr_pos'] = 0
+        self.data['soldier_nr_neg'] = 0
+        
         self.data['returns'] = np.log(self.data.close.astype(float).div(self.data.close.astype(float).shift(1)))
         self.data['cumreturns'] = self.data['returns'].cumsum().apply(np.exp)
         #self.data.dropna(inplace = True)
@@ -265,55 +290,64 @@ class IterativeBacktest(IterativeBase):
         for bar in tqdm(range(len(self.data)-1)): # all bars except of last one
         #for bar in range(len(self.data)-1):
             self.pos_result = 0
-        #predict probabilities
-            buy_prob = buy_model.predict_proba(self.data[['pctB', 'low_pct', 'high_pct', 'high_pct_lag_1', 'close_pct_lag_1','low_pct_lag_2', 'open_pct', 'low_pct_lag_1', 'open_pct_lag_1']].iloc[[bar]])
-            sell_prob = sell_model.predict_proba(self.data[['pctB', 'low_pct', 'high_pct', 'high_pct_lag_1', 'close_pct_lag_1','low_pct_lag_2', 'open_pct', 'low_pct_lag_1', 'open_pct_lag_1']].iloc[[bar]])
-            buy_model_signal = buy_prob[0][1]>0.52
-            sell_model_signal = sell_prob[0][1]>0.52 
-
-
-                    
+            if self.data.soldier_nr_pos.iloc[bar-1]==0 and self.data.higher_low.iloc[bar]==1 and self.data.higher_close.iloc[bar]==1 and self.data.volume.iloc[bar]>self.data.volume.iloc[bar-1]:
+                self.data.soldier_nr_pos.iloc[bar] = 1
+            elif self.data.soldier_nr_pos.iloc[bar-1] == 1 and self.data.higher_low.iloc[bar]==1 and self.data.higher_close.iloc[bar]==1 and self.data.volume.iloc[bar]>self.data.volume.iloc[bar-1]:
+                self.data.soldier_nr_pos.iloc[bar] = self.data.soldier_nr_pos.iloc[bar-1]+1
+            elif self.data.soldier_nr_pos.iloc[bar-1] == 2 and self.data.higher_low.iloc[bar]==1 and self.data.higher_close.iloc[bar]==1:
+                self.data.soldier_nr_pos.iloc[bar] = self.data.soldier_nr_pos.iloc[bar-1]+1
+            else:
+                self.data.soldier_nr_pos.iloc[bar] = 0     
+                
+            if self.data.soldier_nr_neg.iloc[bar-1]==0 and self.data.lower_high.iloc[bar]==1 and self.data.lower_close.iloc[bar]==1 and self.data.volume.iloc[bar]>self.data.volume.iloc[bar-1]:
+                self.data.soldier_nr_neg.iloc[bar] = 1
+            elif self.data.soldier_nr_neg.iloc[bar-1] == 1 and self.data.lower_high.iloc[bar]==1 and self.data.lower_close.iloc[bar]==1 and self.data.volume.iloc[bar]>self.data.volume.iloc[bar-1]:
+                self.data.soldier_nr_neg.iloc[bar] = self.data.soldier_nr_neg.iloc[bar-1]+1
+            elif self.data.soldier_nr_neg.iloc[bar-1] == 2 and self.data.lower_high.iloc[bar]==1 and self.data.lower_close.iloc[bar]==1:
+                self.data.soldier_nr_neg.iloc[bar] = self.data.soldier_nr_neg.iloc[bar-1]+1
+            else:
+                self.data.soldier_nr_neg.iloc[bar] = 0                                
         #CLOSE POSITIONS
             if self.position == 1:
-                # if self.data.close.iloc[bar] > self.start_price and self.data.close_ma.iloc[bar-1]>self.data.bb_bbm.iloc[bar-1] and self.data.close_ma.iloc[bar]<self.data.bb_bbm.iloc[bar]:
-                #     self.close_long(bar, size='all')
-                #     self.pos_result = 1
-                #     self.position = 0
-                #     self.trailing_stop = 0
-                #     self.start_price = 0
+                #stoploss
+                if self.start_price*(1-sl_coef)>=self.data.close.iloc[bar]:
+                    self.close_long(bar, size='all')
+                    self.pos_result = -1
+                    self.position = 0
+                    self.trailing_stop = 0
+                    self.start_price = 0
+                elif self.start_price*(1+tp_coef)<=self.data.close.iloc[bar]:
+                    self.close_long(bar, size='all')
+                    self.pos_result = 1
+                    self.position = 0
+                    self.trailing_stop = 0
+                    self.start_price = 0
                 
-                self.close_long(bar, size='all')
-                self.pos_result = np.where(self.data.close.iloc[bar]>self.start_price,1,-1)
-                self.position = 0
-                self.trailing_stop = 0
-                self.start_price = 0
-                    
-    
-                    
             if self.position == -1:
-                # if self.data.close.iloc[bar] < self.start_price and self.data.close_ma.iloc[bar-1]<self.data.bb_bbm.iloc[bar-1] and self.data.close_ma.iloc[bar]>self.data.bb_bbm.iloc[bar]:
-                #     self.close_short(bar, size='all')
-                #     self.pos_result = 1
-                #     self.position = 0
-                #     self.trailing_stop = 0
-                #     self.start_price = 0
-                    
-                self.close_short(bar, size='all')
-                self.pos_result = np.where(self.data.close.iloc[bar]<self.start_price,1,-1)
-                self.position = 0
-                self.trailing_stop = 0
-                self.start_price = 0
+                if self.start_price*(1+sl_coef)<=self.data.close.iloc[bar]:
+                    self.close_long(bar, size='all')
+                    self.pos_result = -1
+                    self.position = 0
+                    self.trailing_stop = 0
+                    self.start_price = 0
+                elif self.start_price*(1-tp_coef)>=self.data.close.iloc[bar]:
+                    self.close_long(bar, size='all')
+                    self.pos_result = 1
+                    self.position = 0
+                    self.trailing_stop = 0
+                    self.start_price = 0
+                
                 
          #OPEN POSITIONS
             if self.position == 0:
-                if buy_model_signal == True and self.data.lower_close.iloc[bar]==1 and self.data.higher_volume.iloc[bar]==1:
+                if self.data.soldier_nr_neg[bar] == 2:
                     self.go_long(bar,amount = 'all')
                     self.position = 1
                     self.trailing_stop = self.data.close.iloc[bar] - (self.data.ATR.iloc[bar]*sl_coef)
                     self.start_price = self.data.close.iloc[bar]  
                     self.data['start_price'].iloc[bar] = self.start_price
                                
-                elif sell_model_signal == True and self.data.higher_close.iloc[bar]==1 and self.data.higher_volume.iloc[bar]==1:
+                elif self.data.soldier_nr_pos[bar] == 2:
                     self.go_short(bar,amount = 'all')
                     self.position = -1
                     self.trailing_stop = self.data.close.iloc[bar] + (self.data.ATR.iloc[bar]*sl_coef)
@@ -327,12 +361,13 @@ class IterativeBacktest(IterativeBase):
         self.close_all(bar+1) # close pos at the last bar       
         
 
-sf.get_stored_data_close('BTCBUSD','1h',"2022-01-01","2022-11-28")
+sf.get_stored_data_close('BTCBUSD','1h',"2020-01-01","2022-11-28")
 
 bc = IterativeBacktest("BTCBUSD","2022-11-01","2023-03-23",tf='1h',amount = 1000)
-bc = IterativeBacktest("BTCBUSD","2022-11-01","2023-01-30",tf='1m',amount = 1000)
+bc = IterativeBacktest("BTCBUSD","2023-03-01","2023-03-10",tf='1m',amount = 1000)
+bc = IterativeBacktest("BTCBUSD","2023-03-01","2023-03-23",tf='5m',amount = 1000)
 
-bc.calculate_onebar_strategy(ma_interval=15, bb_interval=30, body_size =0.8, sl_coef=1.25, vol_coef = 1)
+bc.calculate_test_strategy(body_size =0.8, sl_coef=0.0015, tp_coef = 0.005)
 bc.plot_data()
 
 # sf.excel_export(bc.data.tail(10000))

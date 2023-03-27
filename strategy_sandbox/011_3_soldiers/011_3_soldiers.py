@@ -326,7 +326,7 @@ sf.excel_export(bc.data.tail(10000))
 
 
 #IDEA OF THREE CONSECUTIVE BARS
-data = sf.get_stored_data_close('BTCBUSD','5m','2020-01-01','2023-01-30')
+data = sf.get_stored_data_close('BTCBUSD','1m','2023-01-01','2023-03-23')
 # Initialize Bollinger Bands Indicator
 
 
