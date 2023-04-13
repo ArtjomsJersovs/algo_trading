@@ -50,7 +50,7 @@ class Trader():
         self.position = 0
         self.trailing_stop = 0
         self.start_price = 0
-        self.leverage = 1
+        self.leverage = 3
         self.test_order = 'none'
         client.futures_change_leverage(symbol=ticker, leverage=self.leverage)
         #-------------------

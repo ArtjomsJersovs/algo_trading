@@ -2,12 +2,13 @@ from tradingview_ta import TA_Handler, Interval, Exchange, get_multiple_analysis
 import pandas as pd
 import gspread
 import schedule
+import time
 
-gc = gspread.service_account('secrets.json')
+gc = gspread.service_account(r'C:\Users\Administrator\Documents\algo_trading\secrets.json')
 
 # gc.del_spreadsheet('1-Q3IjES4jlbTdZIh2llgvl5LTDrvAC4muKWKllxxd5I')
 def tradingview_etl_summary():
-  analysis = get_multiple_analysis(screener="crypto",interval=Interval.INTERVAL_5_MINUTES,symbols=[ "BINANCE:BTCBUSDPERP","BINANCE:ETHBUSDPERP","BINANCE:DOTBUSDPERP","BINANCE:LINKBUSDPERP","BINANCE:LTCBUSDPERP"])
+  analysis = get_multiple_analysis(screener="crypto",interval=Interval.INTERVAL_5_MINUTES,symbols=[ "BINANCE:BTCBUSD","BINANCE:ETHBUSD","BINANCE:DOTBUSD","BINANCE:LINKBUSD","BINANCE:LTCBUSD"])
   df = pd.DataFrame(columns=[
     'ticker', 'time', 'recommend_sum', 'rec_sum_buy', 'rec_sum_sell',
     'rec_sum_neutral', 'rec_osc', 'rec_osc_buy', 'rec_osc_sell',
@@ -48,13 +49,12 @@ def tradingview_etl_summary():
       },
       ignore_index=True)
 
-  print(df)
 
-  df_btc = df[(df['ticker']=='BINANCE:BTCBUSDPERP')]
-  df_eth =df[(df['ticker']=='BINANCE:ETHBUSDPERP')]
-  df_dot = df[(df['ticker']=='BINANCE:DOTBUSDPERP')]
-  df_link = df[(df['ticker']=='BINANCE:LINKBUSDPERP')]
-  df_ltc = df[(df['ticker']=='BINANCE:LTCBUSDPERP')]
+  df_btc = df[(df['ticker']=='BINANCE:BTCBUSD')]
+  df_eth =df[(df['ticker']=='BINANCE:ETHBUSD')]
+  df_dot = df[(df['ticker']=='BINANCE:DOTBUSD')]
+  df_link = df[(df['ticker']=='BINANCE:LINKBUSD')]
+  df_ltc = df[(df['ticker']=='BINANCE:LTCBUSD')]
 
   # sh_5m = gc.create('TW_tech_indicators_summary_5min')
   # sh_5m.share('jersovs.artjoms@gmail.com', perm_type='user', role='writer')
@@ -90,10 +90,11 @@ def tradingview_etl_summary():
 
 def scheduled_script():
     
-  schedule.every(5).minutes.do(tradingview_etl_summary)
+  schedule.every(4.91).minutes.do(tradingview_etl_summary)
     
   while True:
     schedule.run_pending()
+    time.sleep(1)
 
 if __name__ == '__main__':
   print('starting_script')
