@@ -2,6 +2,7 @@ import os
 import time
 import datetime as dt
 import time
+import math
 from binance.helpers import date_to_milliseconds
 import numpy as np
 import pandas as pd
@@ -129,9 +130,11 @@ class IterativeBase():
         date, price = self.get_values(bar)
         print('current balance: {} | Date: {}'.format(round(self.current_balance,5),date))
 
-    def buy_instrument(self, bar, units = None, amount = None, commission = 0.00075):
+    def buy_instrument(self, bar, units = None, amount = None, trail_stop=False, trail_stop_price = 0, commission = 0.00075):
 
         date, price = self.get_values(bar)
+        if trail_stop == True: 
+            price = trail_stop_price
         if amount is not None: # use units if units are passed, otherwise calculate units
             units = float(amount / price)
         self.units += abs(units)
@@ -141,10 +144,11 @@ class IterativeBase():
         self.current_balance -= abs(units) * price # reduce cash balance by "purchase price"
         #print("{} |  Buying {} for {}, commission paid: {}".format(date, round(units,5), round(price, 5), round(costs,2)))
 
-    def sell_instrument(self, bar, units = None, amount = None, percent = 1, commission = 0.00075):
+    def sell_instrument(self, bar, units = None, amount = None,trail_stop=False, trail_stop_price = 0, percent = 1, commission = 0.00075):
 
         date, price = self.get_values(bar)
-
+        if trail_stop == True: 
+            price = trail_stop_price
         if units is None and amount is None:
             units = self.units * percent
         if amount is not None: # use units if units are passed, otherwise calculate units
@@ -223,15 +227,15 @@ class IterativeBacktest(IterativeBase):
     # helper method
     def close_long(self, bar, size):
         if size == 'all':
-            self.sell_instrument(bar, units = self.units)
+            self.sell_instrument(bar, units = self.units, trail_stop=True,  trail_stop_price=self.trailing_stop)
         elif size == 'half':
-            self.sell_instrument(bar, units = (self.units/2))
+            self.sell_instrument(bar, units = (self.units/2), trail_stop=True,  trail_stop_price=self.trailing_stop)
             
     def close_short(self, bar, size):
         if size == 'all':
-            self.buy_instrument(bar, units = self.units)
+            self.buy_instrument(bar, units = self.units, trail_stop=True,  trail_stop_price=self.trailing_stop)
         elif size == 'half':
-            self.buy_instrument(bar, units = (self.units/2))
+            self.buy_instrument(bar, units = (self.units/2), trail_stop=True,  trail_stop_price=self.trailing_stop)
             
     def go_long(self, bar, units = None, amount = None):
         if self.position == -1:
@@ -263,6 +267,7 @@ class IterativeBacktest(IterativeBase):
         self.trailing_stop = 0
         self.start_price = 0
         self.pos_result = 0
+        self.rng_vs_price_start = 0
         
         self.data['ATR'] = average_true_range(high = self.data.high, low = self.data.low, close = self.data.close, window = ma_interval)
         indicator_bb = BollingerBands(close=self.data["close"], window=bb_interval, window_dev=2)
@@ -270,6 +275,8 @@ class IterativeBacktest(IterativeBase):
         self.data['trailing_stop'] = 0
         self.data['pos_result'] = 0
         self.data['start_price'] = 0
+        self.data['rng_vs_price_start'] = 0
+        
         #strategy specific
         self.data['volume_ma'] = self.data['volume'].rolling(ma_interval).mean()
         self.data['higher_low'] = np.where(self.data.low>self.data.low.shift(1),1,0)
@@ -282,6 +289,7 @@ class IterativeBacktest(IterativeBase):
         self.data['body_size'] = np.where(self.data.rng_body.div(self.data.rng)>0.8,1,0)
         self.data['soldier_nr_pos'] = 0
         self.data['soldier_nr_neg'] = 0
+        self.data['rng_vs_price'] = np.where((np.ceil(round(self.data.rng/self.data.close,5)/0.001)*0.001)>0.006,0.006,(np.ceil(round(self.data.rng/self.data.close,5)/0.001)*0.001))
         
         self.data['returns'] = np.log(self.data.close.astype(float).div(self.data.close.astype(float).shift(1)))
         self.data['cumreturns'] = self.data['returns'].cumsum().apply(np.exp)
@@ -325,13 +333,13 @@ class IterativeBacktest(IterativeBase):
                 
             if self.position == -1:
                 if self.start_price*(1+sl_coef)<=self.data.close.iloc[bar]:
-                    self.close_long(bar, size='all')
+                    self.close_short(bar, size='all')
                     self.pos_result = -1
                     self.position = 0
                     self.trailing_stop = 0
                     self.start_price = 0
                 elif self.start_price*(1-tp_coef)>=self.data.close.iloc[bar]:
-                    self.close_long(bar, size='all')
+                    self.close_short(bar, size='all')
                     self.pos_result = 1
                     self.position = 0
                     self.trailing_stop = 0
@@ -340,16 +348,18 @@ class IterativeBacktest(IterativeBase):
                 
          #OPEN POSITIONS
             if self.position == 0:
-                if self.data.soldier_nr_neg[bar] == 2:
+                if self.data.soldier_nr_neg[bar] == 2 and self.data.rng_vs_price[bar]<=0.003:
                     self.go_long(bar,amount = 'all')
                     self.position = 1
+                    self.rng_vs_price_start = self.data.rng_vs_price.iloc[bar]
                     self.trailing_stop = self.data.close.iloc[bar] - (self.data.ATR.iloc[bar]*sl_coef)
                     self.start_price = self.data.close.iloc[bar]  
                     self.data['start_price'].iloc[bar] = self.start_price
                                
-                elif self.data.soldier_nr_pos[bar] == 2:
+                elif self.data.soldier_nr_pos[bar] == 2 and self.data.rng_vs_price[bar]<=0.003:
                     self.go_short(bar,amount = 'all')
                     self.position = -1
+                    self.rng_vs_price_start = self.data.rng_vs_price.iloc[bar]
                     self.trailing_stop = self.data.close.iloc[bar] + (self.data.ATR.iloc[bar]*sl_coef)
                     self.start_price = self.data.close.iloc[bar]   
                     self.data['start_price'].iloc[bar] = self.start_price
@@ -358,6 +368,7 @@ class IterativeBacktest(IterativeBase):
             self.data['position'].iloc[bar] = self.position
             self.data['trailing_stop'].iloc[bar] = self.trailing_stop
             self.data['pos_result'].iloc[bar] = self.pos_result
+            self.data['rng_vs_price_start'].iloc[bar] = self.rng_vs_price_start
         self.close_all(bar+1) # close pos at the last bar       
         
 
@@ -367,8 +378,14 @@ bc = IterativeBacktest("BTCBUSD","2022-11-01","2023-03-23",tf='1h',amount = 1000
 bc = IterativeBacktest("BTCBUSD","2023-03-01","2023-03-10",tf='1m',amount = 1000)
 bc = IterativeBacktest("BTCBUSD","2023-03-01","2023-03-23",tf='5m',amount = 1000)
 
-bc.calculate_test_strategy(body_size =0.8, sl_coef=0.0015, tp_coef = 0.005)
+
+bc.data.rng_vs_price[(bc.data.rng_vs_price<0.005)].hist(bins=5)
+plt.show()
+
+bc.calculate_test_strategy(body_size =0.8, ma_interval = 15, sl_coef=0.01, tp_coef = 0.02)
 bc.plot_data()
+
+sf.excel_export(bc.data[['pos_result','rng_vs_price','returns','cumreturns','position','rng_vs_price_start']])
 
 # sf.excel_export(bc.data.tail(10000))
 #Find best params 
