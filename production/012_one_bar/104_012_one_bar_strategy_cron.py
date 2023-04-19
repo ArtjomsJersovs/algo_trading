@@ -17,8 +17,6 @@ import telegram_send as ts
 #ts_conf=r'C:\Users\Administrator\Documents\algo_trading\telegram-send.conf'
 ts_conf=r'C:\Users\artjoms.jersovs\github\algo_trading\algo_trading\telegram-send.conf'
 
-client, bsm = sf.setup_api_conn_binance_only()
-
 class Trader():
 
     def __init__(self, ticker, size, interval, hist_period_hours, leverage, ma_interval=15, bb_interval=30, body_size =0.8, sl_coef=1.25, vol_coef = 1):
@@ -223,7 +221,7 @@ class Trader():
         
 
 if __name__ == "__main__":
-
+    client = sf.setup_api_conn_binance_only()
     bot = Trader(ticker='BTCBUSD', size= 25, interval='1h', hist_period_hours=40, leverage=1, ma_interval=15, bb_interval=30, body_size =0.8, sl_coef=1.25, vol_coef = 1)
     print('done')
 

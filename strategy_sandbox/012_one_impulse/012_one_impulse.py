@@ -17,6 +17,7 @@ import subprocess
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 from matplotlib import pyplot
+import seaborn as sns
 import itertools
 plt.style.use("ggplot")
 
@@ -308,15 +309,29 @@ class IterativeBacktest(IterativeBase):
         self.close_all(bar+1) # close pos at the last bar       
         
 
-sf.get_stored_data_close('BTCBUSD','1h',"2022-11-01","2023-03-23")
+# sf.get_stored_data_close('ETHBTC','1h',"2022-11-01","2023-04-15")
 
-bc = IterativeBacktest("BTCBUSD","2022-11-01","2023-03-23",tf='1h',amount = 1000)
-bc = IterativeBacktest("BTCBUSD","2022-11-01","2023-01-30",tf='1m',amount = 1000)
+bc = IterativeBacktest("DOTBUSD","2022-11-01","2023-04-15",tf='1h',amount = 1000)
+(20, 30, 0.7, 1.5, 1.5)
 
-bc.calculate_onebar_strategy(ma_interval=15, bb_interval=30, body_size =0.8, sl_coef=1.25, vol_coef = 1)
+
+bc.calculate_onebar_strategy(ma_interval=5, bb_interval=40, body_size =0.7, sl_coef=2, vol_coef = 1) #BTCBUSD
+bc.calculate_onebar_strategy(ma_interval=15, bb_interval=30, body_size =0.7, sl_coef=1.5, vol_coef = 1.5) # ETHBUSD
+bc.calculate_onebar_strategy(ma_interval=20, bb_interval=30, body_size =0.7, sl_coef=1.5, vol_coef = 1.5) # NEARBUSD
+bc.calculate_onebar_strategy(ma_interval=20, bb_interval=20, body_size =0.8, sl_coef=1.5, vol_coef = 1) # ATOMBUSD
+bc.calculate_onebar_strategy(ma_interval=20, bb_interval=20, body_size =0.8, sl_coef=1.5, vol_coef = 1) # ADABUSD
+bc.calculate_onebar_strategy(ma_interval=20, bb_interval=30, body_size =0.7, sl_coef=1.5, vol_coef = 1.5) # DOTBUSD
 bc.plot_data()
 
-# sf.excel_export(bc.data.tail(10000))
+
+#Plot trades overlap across all pairs
+df_pos_tickers = pd.DataFrame(bc.data.loc[:,('position')].rename(str('btc')))
+add_series = bc.data.loc[:,('position')].rename(str('dot'))
+df_pos_tickers = df_pos_tickers.assign(dot=add_series)
+df_pos_tickers.replace(-1,1, inplace=True)
+#heatmap = sns.heatmap(df_pos_tickers.corr(), vmin=-1, vmax=1, annot=True)
+
+
 #Find best params 
 df = pd.DataFrame(columns =['combination' ,'accuracy','perf','perf_wo_comm', 'trades' ])
 combination = list()
@@ -327,61 +342,38 @@ trades_list = list()
 
 #Iterator of best params tf and pair
 ma_interval = list(range(5,25,5))
-bb_interval = list(range(10,40,10))
+bb_interval = list(range(20,50,10))
 body_size = list(np.arange(0.7,0.9,0.1))
-sl_coef = list(np.arange(1,2.25,0.25))
-vol_coef = list(np.arange(1,2,0.25))
+sl_coef = list(np.arange(1,2.25,0.5))
+vol_coef = list(np.arange(1,1.75,0.25))
 
 all_combinations = list(itertools.product(ma_interval, bb_interval, body_size, sl_coef, vol_coef))
-start_time = time.time()
-counter = 1
-for i in all_combinations:
-    bc.calculate_onebar_strategy(ma_interval = i[0], bb_interval=i[1], body_size=i[2], sl_coef=i[3], vol_coef=i[4])
-    df = df.append(
-        {
-        'combination':i,
-        'accuracy':round(len(bc.data.loc[bc.data['pos_result']==1,['pos_result']])/len(bc.data.loc[bc.data['pos_result']!=0,['pos_result']]),2),
-        'perf':(bc.current_balance - bc.initial_balance) / bc.initial_balance * 100,
-        'perf_wo_comm':(bc.current_balance - bc.initial_balance - bc.costs) / bc.initial_balance * 100,
-        'trades':bc.trades
-        },
-        ignore_index=True
-    )
-    print(f'{counter} / {len(all_combinations)} done...')
-    counter += 1
-opt = df.iloc[np.argmax(df.perf_wo_comm)]
-print(75*"-")
-print('The Best combination is: \n{}'.format(opt))
-print(f'time spent on gridsearch in minutes: {round((time.time() - start_time)/60,2)}')
+pairs = ['ETHBTC','ATOMETH', 'BTCBUSD','ETHBUSD','ATOMBUSD','NEARBUSD','DOTBUSD','ADABUSD']
+# for tick in pairs:
+#     sf.get_stored_data_close(tick,'1h',"2022-11-01","2023-04-15")
 
-#sf.excel_export(df)
 
-# The Best combination is:
-# combination     (15, 30, 0.7999999999999999, 1.25, 1.0)
-# accuracy                                           0.39
-# perf                                         448.940587
-# perf_wo_comm                                 379.231816
-# trades                                              779
-# Name: 504, dtype: object
-
-x = dict({
-	"RECOMMENDATION": "NEUTRAL",
-	"BUY": 1,
-	"SELL": 2,
-	"NEUTRAL": 8,
-	"COMPUTE": {
-		"RSI": "NEUTRAL",
-		"STOCH.K": "NEUTRAL",
-		"CCI": "NEUTRAL",
-		"ADX": "NEUTRAL",
-		"AO": "NEUTRAL",
-		"Mom": "SELL",
-		"MACD": "BUY",
-		"Stoch.RSI": "NEUTRAL",
-		"W%R": "NEUTRAL",
-		"BBP": "SELL",
-		"UO": "NEUTRAL"
-	}
-})
-
-x['COMPUTE'].keys()
+for ticker in pairs:
+    bc = IterativeBacktest(ticker,"2022-11-01","2023-04-15",tf='1h',amount = 1000)
+    df = pd.DataFrame(columns =['combination' ,'accuracy','perf','perf_wo_comm', 'trades' ])
+    start_time = time.time()
+    counter = 1
+    for i in all_combinations:
+        bc.calculate_onebar_strategy(ma_interval = i[0], bb_interval=i[1], body_size=i[2], sl_coef=i[3], vol_coef=i[4])
+        df = df.append(
+            {
+            'combination':i,
+            'accuracy':round(len(bc.data.loc[bc.data['pos_result']==1,['pos_result']])/len(bc.data.loc[bc.data['pos_result']!=0,['pos_result']]),2),
+            'perf':(bc.current_balance - bc.initial_balance) / bc.initial_balance * 100,
+            'perf_wo_comm':(bc.current_balance - bc.initial_balance - bc.costs) / bc.initial_balance * 100,
+            'trades':bc.trades
+            },
+            ignore_index=True
+        )
+        print(f'{counter} / {len(all_combinations)} done...')
+        counter += 1
+    opt = df.iloc[np.argmax(df.perf_wo_comm)]
+    print(75*"-")
+    print('The Best combination is: \n{}'.format(opt))
+    print(f'time spent on gridsearch in minutes: {round((time.time() - start_time)/60,2)}')
+    df.to_csv('C:/Users/artjoms.jersovs/github/algo_trading/algo_trading/production/012_one_bar/{}_test_results.csv'.format(ticker))
