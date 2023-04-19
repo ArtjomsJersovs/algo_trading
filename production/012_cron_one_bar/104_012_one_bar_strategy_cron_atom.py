@@ -14,8 +14,8 @@ from pandas.core.tools.datetimes import to_datetime
 from ta.volatility import average_true_range, BollingerBands
 import stored_functions as sf
 import telegram_send as ts
-#ts_conf=r'C:\Users\Administrator\Documents\algo_trading\telegram-send.conf'
-ts_conf=r'C:\Users\artjoms.jersovs\github\algo_trading\algo_trading\telegram-send.conf'
+ts_conf=r'C:\Users\Administrator\Documents\algo_trading\telegram-send.conf'
+#ts_conf=r'C:\Users\artjoms.jersovs\github\algo_trading\algo_trading\telegram-send.conf'
 
 class Trader():
 
@@ -36,15 +36,16 @@ class Trader():
         self.leverage = leverage
         client.futures_change_leverage(symbol=ticker, leverage=leverage)
         self.run_date = pd.to_datetime(dt.datetime.now())  
+        print(self.run_date)
         #-------------------
         #for server
-        # self.bot_balance_filename = 'C:/Users/Administrator/Documents/algo_trading/production/012_one_bar/104_012_one_bar_bal.csv'
-        # self.params_filename = 'C:/Users/Administrator/Documents/algo_trading/production/012_one_bar/btcbusd_1h_params.csv'
-        # self.file_name = 'C:/Users/Administrator/Documents/algo_trading/production/012_one_bar/104_012_one_bar_tradelog_{}.csv'.format(self.self.run_date)
+        self.bot_balance_filename = 'C:/Users/Administrator/Documents/algo_trading/production/012_cron_one_bar/104_012_one_bar_bal.csv'
+        self.params_filename = 'C:/Users/Administrator/Documents/algo_trading/production/012_cron_one_bar/btcbusd_1h_params.csv'
+        self.file_name = 'C:/Users/Administrator/Documents/algo_trading/production/012_cron_one_bar/104_012_one_bar_tradelog.csv'
         #for local machine
-        self.bot_balance_filename = 'C:/Users/artjoms.jersovs/github/algo_trading/algo_trading/production/012_one_bar/104_012_btcbusd_1h_bal.csv'
-        self.params_filename = 'C:/Users/artjoms.jersovs/github/algo_trading/algo_trading/production/012_one_bar/104_012_btcbusd_1h_params.csv'
-        self.file_name = 'C:/Users/artjoms.jersovs/github/algo_trading/algo_trading/production/012_one_bar/104_012_btcbusd_1h_tradelog.csv'
+        # self.bot_balance_filename = 'C:/Users/artjoms.jersovs/github/algo_trading/algo_trading/production/012_one_bar/104_012_btcbusd_1h_bal.csv'
+        # self.params_filename = 'C:/Users/artjoms.jersovs/github/algo_trading/algo_trading/production/012_one_bar/104_012_btcbusd_1h_params.csv'
+        # self.file_name = 'C:/Users/artjoms.jersovs/github/algo_trading/algo_trading/production/012_one_bar/104_012_btcbusd_1h_tradelog.csv'
         #*****************add strategy-specific attributes here******************
         self.ma_interval = ma_interval
         self.bb_interval = bb_interval
@@ -134,7 +135,7 @@ class Trader():
         self.balance.to_csv(self.bot_balance_filename, index = False)
         self.params.to_csv(self.params_filename, index = False)
         self.trades_data.to_csv(self.file_name)
-        self.report_trade(order, f"___________104_012 GOING {side}___________")
+        self.report_trade(order, f"___________{self.ticker} GOING {side}___________")
     
     def report_trade(self, order, text):
         print("\n" + 100* "-")
@@ -222,6 +223,7 @@ class Trader():
 
 if __name__ == "__main__":
     client = sf.setup_api_conn_binance_only()
-    bot = Trader(ticker='BTCBUSD', size= 25, interval='1h', hist_period_hours=40, leverage=1, ma_interval=15, bb_interval=30, body_size =0.8, sl_coef=1.25, vol_coef = 1)
-    print('done')
+    bot = Trader(ticker='ATOMBUSD', size= 40, interval='1h', hist_period_hours=40, leverage=5, ma_interval=20, bb_interval=20, body_size =0.8, sl_coef=1.5, vol_coef = 1)
+    print('{} - done at: {} and price: {}'.format(bot.ticker, bot.run_date, bot.last_price))
+    ts.send(conf=ts_conf, messages=[bot.ticker+' - done at price : '+str(bot.last_price)])
 
