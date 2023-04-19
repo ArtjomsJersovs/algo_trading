@@ -377,3 +377,6 @@ for ticker in pairs:
     print('The Best combination is: \n{}'.format(opt))
     print(f'time spent on gridsearch in minutes: {round((time.time() - start_time)/60,2)}')
     df.to_csv('C:/Users/artjoms.jersovs/github/algo_trading/algo_trading/production/012_one_bar/{}_test_results.csv'.format(ticker))
+
+#cron incremental logs
+#/c "powershell.exe py C:\Users\Administrator\Documents\algo_trading\production\012_cron_one_bar\104_012_one_bar_strategy_cron_dot.py" >>C:\Users\Administrator\Documents\algo_trading\production\012_cron_one_bar\104_012_dot_1h_log.log

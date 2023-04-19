@@ -39,9 +39,9 @@ class Trader():
         print(self.run_date)
         #-------------------
         #for server
-        self.bot_balance_filename = 'C:/Users/Administrator/Documents/algo_trading/production/012_cron_one_bar/104_012_one_bar_bal.csv'
-        self.params_filename = 'C:/Users/Administrator/Documents/algo_trading/production/012_cron_one_bar/btcbusd_1h_params.csv'
-        self.file_name = 'C:/Users/Administrator/Documents/algo_trading/production/012_cron_one_bar/104_012_one_bar_tradelog.csv'
+        self.bot_balance_filename = f'C:/Users/Administrator/Documents/algo_trading/production/012_cron_one_bar/104_012_{self.ticker}_bal.csv'
+        self.params_filename = f'C:/Users/Administrator/Documents/algo_trading/production/012_cron_one_bar/{self.ticker}_1h_params.csv'
+        self.file_name = f'C:/Users/Administrator/Documents/algo_trading/production/012_cron_one_bar/104_012_{self.ticker}_tradelog.csv'
         #for local machine
         # self.bot_balance_filename = 'C:/Users/artjoms.jersovs/github/algo_trading/algo_trading/production/012_one_bar/104_012_btcbusd_1h_bal.csv'
         # self.params_filename = 'C:/Users/artjoms.jersovs/github/algo_trading/algo_trading/production/012_one_bar/104_012_btcbusd_1h_params.csv'
@@ -77,9 +77,12 @@ class Trader():
         print(self.params)
         #************************************************************************
         #MAIN CALLBACK
-        self.data = self.get_historical_data().assign(order_price=np.nan, order_qty=np.nan,trade_size_usd=np.nan)
-        self.define_strategy()
-        self.execute_trades()
+        try:
+            self.data = self.get_historical_data().assign(order_price=np.nan, order_qty=np.nan,trade_size_usd=np.nan)
+            self.define_strategy()
+            self.execute_trades()
+        except Exception as e: 
+            ts.send(conf=ts_conf,messages=[str(e)])
 
 
     def get_historical_data(self):
@@ -223,7 +226,7 @@ class Trader():
 
 if __name__ == "__main__":
     client = sf.setup_api_conn_binance_only()
-    bot = Trader(ticker='ATOMBUSD', size= 40, interval='1h', hist_period_hours=40, leverage=5, ma_interval=20, bb_interval=20, body_size =0.8, sl_coef=1.5, vol_coef = 1)
+    bot = Trader(ticker='ATOMUSDT', size= 40, interval='1h', hist_period_hours=40, leverage=5, ma_interval=20, bb_interval=20, body_size =0.8, sl_coef=1.5, vol_coef = 1)
     print('{} - done at: {} and price: {}'.format(bot.ticker, bot.run_date, bot.last_price))
     ts.send(conf=ts_conf, messages=[bot.ticker+' - done at price : '+str(bot.last_price)])
 
