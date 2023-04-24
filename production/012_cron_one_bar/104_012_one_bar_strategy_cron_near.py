@@ -90,6 +90,7 @@ class Trader():
         df = pd.DataFrame(df, columns = ['timestamp', 'open', 'high', 'low', 'close', 'volume', 'close_time', 'quote_av', 'trades', 'tb_base_av', 'tb_quote_av', 'ignore'])
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
         df.set_index('timestamp', inplace=True)
+        df = df.iloc[:-1,:]
         df = df[['open','high','low','close', 'volume']].apply(pd.to_numeric)
         print('historical data - success')
         return df
@@ -198,7 +199,7 @@ class Trader():
                 self.trailing_stop = self.data.close.iloc[-1] - (self.data.ATR.iloc[-1]*self.sl_coef) 
                 self.params.loc[0,('date')] = self.run_date
                 self.params.loc[0,('trailing_stop')] = self.trailing_stop
-                self.params.to_csv(self.params_filename)
+                self.params.to_csv(self.params_filename, index=False)
         
         elif self.position == -1:
             #close all if price dropped under stoploss
@@ -220,12 +221,13 @@ class Trader():
                 self.trailing_stop = self.data.close.iloc[-1] + (self.data.ATR.iloc[-1]*self.sl_coef)   
                 self.params.loc[0,('date')] = self.run_date 
                 self.params.loc[0,('trailing_stop')] = self.trailing_stop
-                self.params.to_csv(self.params_filename)
+                self.params.to_csv(self.params_filename, index=False)
         
 
 if __name__ == "__main__":
     client = sf.setup_api_conn_binance_only()
     bot = Trader(ticker='NEARBUSD', size= 40, interval='1h', hist_period_hours=40, leverage=5, ma_interval=20, bb_interval=30, body_size =0.7, sl_coef=1.5, vol_coef = 1.5)
     print('{} - done at: {} and price: {}'.format(bot.ticker, bot.run_date, bot.last_price))
-    ts.send(conf=ts_conf, messages=[bot.ticker+' - done at price : '+str(bot.last_price)])
+    if dt.datetime.now().hour % 4:
+        ts.send(conf=ts_conf, messages=[bot.ticker+' - listening - price : '+str(bot.last_price)])
 
