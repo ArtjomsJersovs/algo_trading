@@ -309,19 +309,27 @@ class IterativeBacktest(IterativeBase):
         self.close_all(bar+1) # close pos at the last bar       
         
 
-# sf.get_stored_data_close('ETHBTC','1h',"2022-11-01","2023-04-15")
+
+sf.get_stored_data_close('ATOMUSDT','1h',"2023-01-01","2023-04-25")
+
 
 bc = IterativeBacktest("DOTBUSD","2022-11-01","2023-04-15",tf='1h',amount = 1000)
-(20, 30, 0.7, 1.5, 1.5)
+
+sf.excel_export(bc.data)
 
 
-bc.calculate_onebar_strategy(ma_interval=5, bb_interval=40, body_size =0.7, sl_coef=2, vol_coef = 1) #BTCBUSD
-bc.calculate_onebar_strategy(ma_interval=15, bb_interval=30, body_size =0.7, sl_coef=1.5, vol_coef = 1.5) # ETHBUSD
-bc.calculate_onebar_strategy(ma_interval=20, bb_interval=30, body_size =0.7, sl_coef=1.5, vol_coef = 1.5) # NEARBUSD
-bc.calculate_onebar_strategy(ma_interval=20, bb_interval=20, body_size =0.8, sl_coef=1.5, vol_coef = 1) # ATOMBUSD
-bc.calculate_onebar_strategy(ma_interval=20, bb_interval=20, body_size =0.8, sl_coef=1.5, vol_coef = 1) # ADABUSD
-bc.calculate_onebar_strategy(ma_interval=20, bb_interval=30, body_size =0.7, sl_coef=1.5, vol_coef = 1.5) # DOTBUSD
+bc.calculate_onebar_strategy(ma_interval=20, bb_interval=20, body_size =0.7, sl_coef=1.5, vol_coef = 1) # NEARBUSD (20, 20, 0.7, 1.5, 1.0)
+bc.calculate_onebar_strategy(ma_interval=20, bb_interval=30, body_size =0.8, sl_coef=1, vol_coef = 1.25) # ATOMBUSD (20, 30, 0.7999999999999999, 1.0, 1.25)
+bc.calculate_onebar_strategy(ma_interval=15, bb_interval=20, body_size =0.7, sl_coef=1.5, vol_coef = 1.25) # ADABUSD (15, 20, 0.7, 1.5, 1.25) 
+
+#worser performers - keep only three
+bc.calculate_onebar_strategy(ma_interval=20, bb_interval=40, body_size =0.7, sl_coef=2, vol_coef = 1.5) # DOTBUSD (20, 40, 0.7, 2.0, 1.5)
+bc.calculate_onebar_strategy(ma_interval=10, bb_interval=20, body_size =0.7, sl_coef=2, vol_coef = 1.5) #BTCBUSD (10, 20, 0.7, 2.0, 1.5)
+bc.calculate_onebar_strategy(ma_interval=15, bb_interval=20, body_size =0.7, sl_coef=2, vol_coef = 1.25) # ETHBUSD (15, 20, 0.7, 2.0, 1.25)
+
 bc.plot_data()
+bc.data.tail(5)
+
 
 
 #Plot trades overlap across all pairs
@@ -348,7 +356,7 @@ sl_coef = list(np.arange(1,2.25,0.5))
 vol_coef = list(np.arange(1,1.75,0.25))
 
 all_combinations = list(itertools.product(ma_interval, bb_interval, body_size, sl_coef, vol_coef))
-pairs = ['ETHBTC','ATOMETH', 'BTCBUSD','ETHBUSD','ATOMBUSD','NEARBUSD','DOTBUSD','ADABUSD']
+pairs = ['ATOMUSDT','NEARBUSD','DOTBUSD','ADABUSD']
 # for tick in pairs:
 #     sf.get_stored_data_close(tick,'1h',"2022-11-01","2023-04-15")
 
