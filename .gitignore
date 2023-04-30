@@ -29,3 +29,6 @@ examples/
 .Rproj.user
 .rds
 *.log
+*.one
+*.png
+png_test.png

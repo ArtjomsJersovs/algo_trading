@@ -29,7 +29,7 @@ class Trader():
         self.result = 0
         #calculate real position size based on minimum rounding
         self.last_price = float(requests.get('https://www.binance.com/api/v3/ticker/price?symbol={}'.format(self.ticker)).json()['price'])
-        self.size = round_step_size(max(float(size)/self.last_price,0.001), 0.001)
+        self.size = round_step_size(max(float(size)/self.last_price,1), 1)
         self.size_usd = round(self.last_price*self.size,2)
         print(self.size_usd,'$ position size')
         self.test_order = 'none'
@@ -62,7 +62,7 @@ class Trader():
             self.balance = pd.DataFrame({'strategy_balance':[self.size_usd],'initial_balance':[self.size_usd]})
             self.balance.to_csv(self.bot_balance_filename, index = False)
         print('balance file - success')
-        print(self.balance)
+        print(self.balance.iloc[-1])
         
         #Read main trade parameters
         if os.path.isfile(self.params_filename):
@@ -81,7 +81,8 @@ class Trader():
             self.define_strategy()
             self.execute_trades()
         except Exception as e: 
-            ts.send(conf=ts_conf,messages=[str(e)])
+            ts.send(conf=ts_conf,messages=[str(e)+'-'+self.ticker])
+            print(str(e))
 
 
     def get_historical_data(self):
@@ -225,9 +226,9 @@ class Trader():
         
 
 if __name__ == "__main__":
+    print('-'*70)
     client = sf.setup_api_conn_binance_only()
-    bot = Trader(ticker='NEARBUSD', size= 40, interval='1h', hist_period_hours=40, leverage=5, ma_interval=20, bb_interval=30, body_size =0.7, sl_coef=1.5, vol_coef = 1.5)
+    bot = Trader(ticker='NEARBUSD', size= 40, interval='1h', hist_period_hours=40, leverage=5, ma_interval=20, bb_interval=20, body_size =0.7, sl_coef=1.5, vol_coef = 1)
     print('{} - done at: {} and price: {}'.format(bot.ticker, bot.run_date, bot.last_price))
-    if dt.datetime.now().hour % 4==0:
+    if dt.datetime.now().hour % 1==0:
         ts.send(conf=ts_conf, messages=[bot.ticker+' - listening - price : '+str(bot.last_price)])
-

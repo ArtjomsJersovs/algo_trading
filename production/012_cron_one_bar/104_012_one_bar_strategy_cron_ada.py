@@ -228,8 +228,8 @@ class Trader():
 if __name__ == "__main__":
     print('-'*70)
     client = sf.setup_api_conn_binance_only()
-    bot = Trader(ticker='ADABUSD', size= 40, interval='1h', hist_period_hours=40, leverage=5, ma_interval=20, bb_interval=20, body_size =0.8, sl_coef=1.5, vol_coef = 1)
+    bot = Trader(ticker='ADABUSD', size= 40, interval='1h', hist_period_hours=40, leverage=5, ma_interval=15, bb_interval=20, body_size =0.7, sl_coef=1.5, vol_coef = 1.25)
     print('{} - done at: {} and price: {}'.format(bot.ticker, bot.run_date, bot.last_price))
-    if dt.datetime.now().hour % 4==0:
+    if dt.datetime.now().hour % 1==0:
         ts.send(conf=ts_conf, messages=[bot.ticker+' - listening - price : '+str(bot.last_price)])
 

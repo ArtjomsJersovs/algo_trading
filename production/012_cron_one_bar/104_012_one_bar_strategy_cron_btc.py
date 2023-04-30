@@ -62,7 +62,7 @@ class Trader():
             self.balance = pd.DataFrame({'strategy_balance':[self.size_usd],'initial_balance':[self.size_usd]})
             self.balance.to_csv(self.bot_balance_filename, index = False)
         print('balance file - success')
-        print(self.balance)
+        print(self.balance.iloc[-1])
         
         #Read main trade parameters
         if os.path.isfile(self.params_filename):
@@ -82,7 +82,8 @@ class Trader():
             self.define_strategy()
             self.execute_trades()
         except Exception as e: 
-            ts.send(conf=ts_conf,messages=[str(e)])
+            ts.send(conf=ts_conf,messages=[str(e)+'-'+self.ticker])
+            print(str(e))
 
 
     def get_historical_data(self):
@@ -226,8 +227,9 @@ class Trader():
         
 
 if __name__ == "__main__":
+    print('-'*70)
     client = sf.setup_api_conn_binance_only()
-    bot = Trader(ticker='BTCBUSD', size= 40, interval='1h', hist_period_hours=40, leverage=5, ma_interval=5, bb_interval=40, body_size =0.7, sl_coef=2, vol_coef = 1)
+    bot = Trader(ticker='BTCBUSD', size= 40, interval='1h', hist_period_hours=40, leverage=5, ma_interval=10, bb_interval=20, body_size =0.7, sl_coef=2, vol_coef = 1.5)
     print('{} - done at: {} and price: {}'.format(bot.ticker, bot.run_date, bot.last_price))
-    if dt.datetime.now().hour % 4==0:
+    if dt.datetime.now().hour % 1==0:
         ts.send(conf=ts_conf, messages=[bot.ticker+' - listening - price : '+str(bot.last_price)])
