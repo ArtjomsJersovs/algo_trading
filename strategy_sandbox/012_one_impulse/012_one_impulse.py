@@ -310,10 +310,11 @@ class IterativeBacktest(IterativeBase):
         
 
 
-sf.get_stored_data_close('ATOMUSDT','1h',"2023-01-01","2023-04-25")
+sf.get_stored_data_close('NEARBUSD','1h',"2023-01-01","2023-05-20")
 
 
-bc = IterativeBacktest("ETHBUSD","2022-11-01","2023-04-15",tf='1h',amount = 1000)
+
+bc = IterativeBacktest("NEARBUSD","2023-05-01","2023-05-20",tf='1h',amount = 1000)
 
 sf.excel_export(bc.data)
 
