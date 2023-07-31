@@ -13,9 +13,10 @@ from binance.enums import HistoricalKlinesType
 from pandas.core.tools.datetimes import to_datetime
 from ta.volatility import average_true_range, BollingerBands
 import stored_functions as sf
-import telegram_send as ts
-ts_conf=r'C:\Users\Administrator\Documents\algo_trading\telegram-send.conf'
-#ts_conf=r'C:\Users\artjoms.jersovs\github\algo_trading\algo_trading\telegram-send.conf'
+import telegram_send as ts  #13.5 working version
+#ts_conf=r'C:\Users\Administrator\Documents\algo_trading\telegram-send.conf'
+#ts_conf=r'C:\Users\HP\Documents\GitHub\algo_trading\telegram-send.conf'
+ts_conf=os.path.join(os.getcwd(),'telegram-send.conf')
 
 class Trader():
 
@@ -39,30 +40,19 @@ class Trader():
         print(self.run_date)
         #-------------------
         #for server
-        self.bot_balance_filename = f'C:/Users/Administrator/Documents/algo_trading/production/012_cron_one_bar/104_012_{self.ticker}_bal.csv'
-        self.params_filename = f'C:/Users/Administrator/Documents/algo_trading/production/012_cron_one_bar/{self.ticker}_1h_params.csv'
-        self.file_name = f'C:/Users/Administrator/Documents/algo_trading/production/012_cron_one_bar/104_012_{self.ticker}_tradelog.csv'
+        #self.params_filename = f'C:/Users/Administrator/Documents/algo_trading/production/012_cron_one_bar/{self.ticker}_1h_params.csv'
         #for local machine
-        # self.bot_balance_filename = 'C:/Users/artjoms.jersovs/github/algo_trading/algo_trading/production/012_one_bar/104_012_btcbusd_1h_bal.csv'
-        # self.params_filename = 'C:/Users/artjoms.jersovs/github/algo_trading/algo_trading/production/012_one_bar/104_012_btcbusd_1h_params.csv'
-        # self.file_name = 'C:/Users/artjoms.jersovs/github/algo_trading/algo_trading/production/012_one_bar/104_012_btcbusd_1h_tradelog.csv'
+        self.params_filename = os.path.join(os.getcwd(), f'{self.ticker}_{self.interval_str}_params.csv')
         #*****************add strategy-specific attributes here******************
         self.ma_interval = ma_interval
         self.bb_interval = bb_interval
         self.body_size = body_size
         self.sl_coef = sl_coef
         self.vol_coef = vol_coef
+        self.start_price_telegram = 0
+        self.position_telegram = 0 
         #************************************************************************
-        self.trades_data = pd.DataFrame(columns = ['raw_order_response'])
         #Read all params and logs
-        #balance tracking
-        if os.path.isfile(self.bot_balance_filename):
-            self.balance = pd.read_csv(self.bot_balance_filename)
-        else:
-            self.balance = pd.DataFrame({'strategy_balance':[self.size_usd],'initial_balance':[self.size_usd]})
-            self.balance.to_csv(self.bot_balance_filename, index = False)
-        print('balance file - success')
-        print(self.balance.iloc[-1])
         
         #Read main trade parameters
         if os.path.isfile(self.params_filename):
@@ -127,28 +117,20 @@ class Trader():
         self.data.loc[-1,('order_price')]= float(order['avgPrice'])
         self.data.loc[-1,('order_qty')]= float(order['executedQty'])
         self.data.loc[-1,('trade_size_usd')] = float(order['cumQuote'])        
-        self.trades_data =self.trades_data.append(self.data.iloc[-1])
-        self.trades_data.loc[-1,('raw_order_response')] = str(order)
-        self.result = self.balance.initial_balance.iloc[-1] + float(client.futures_account_trades()[-1]['realizedPnl']) + (float(client.futures_account_trades()[-1]['commission'])*(-1))
         
         self.params.loc[0,('position')] = self.position
         self.params.loc[0,('trailing_stop')] = self.trailing_stop
         self.params.loc[0,('start_price')] = self.start_price
         #prints
-        self.balance = self.balance.append({'strategy_balance':self.result,'initial_balance':self.balance.initial_balance.iloc[0]}, ignore_index=True)
-        self.balance.to_csv(self.bot_balance_filename, index = False)
         self.params.to_csv(self.params_filename, index = False)
-        self.trades_data.to_csv(self.file_name)
         self.report_trade(order, f"___________{self.ticker} GOING {side}___________")
     
     def report_trade(self, order, text):
         print("\n" + 100* "-")
         print(text)
         print("Filled quantity: {} - at price: {}".format(self.data['order_qty'].iloc[-1],self.data['order_price'].iloc[-1]))
-        print("Initial balance: {} | Actual balance {}".format(self.balance.initial_balance.iloc[-1],self.balance.strategy_balance.iloc[-1]))
-        print("Total P/L: {}".format(round((self.balance.strategy_balance.iloc[-1]/self.balance.initial_balance.iloc[-1])*100,2)))
         print(100 * "-" + "\n")  
-        ts.send(conf=ts_conf, messages=[text+" price : "+str(round(float(order['avgPrice']),2))+" P/L : "+str(round((self.balance.strategy_balance.iloc[-1]/self.balance.initial_balance.iloc[-1])*100,2))])
+        ts.send(conf=ts_conf, messages=[text+" price : "+str(round(float(order['avgPrice']),4))+' // Start price: '+str(round(float(self.start_price_telegram),4))])
 
     def execute_trades(self):
         #OPEN POSITION
@@ -190,10 +172,12 @@ class Trader():
                     newOrderRespType = 'RESULT',
                     quantity=float(client.futures_get_all_orders(symbol=self.ticker)[-1]['origQty'])
                 )
+                self.start_price_telegram = self.start_price
+                self.position_telegram = self.position
                 self.position = 0
                 self.trailing_stop = 0
                 self.start_price = 0
-                self.handle_order_data(order=self.sell_order, side='NEUTRAL BY SL')
+                self.handle_order_data(order=self.sell_order, side='NEUTRAL BY SL FROM '+str(self.position_telegram))
 
             #if no actions with position, then pull up stoploss after price climbed over pinbar high + ATR
             elif np.sign(self.data.bench_returns.iloc[-1]) == 1 and (self.start_price<self.data.close.iloc[-1]):
@@ -214,8 +198,9 @@ class Trader():
                 )
                 self.position = 0
                 self.trailing_stop = 0
+                self.start_price_telegram = self.start_price
                 self.start_price = 0
-                self.handle_order_data(order=self.buy_order, side='NEUTRAL BY SL')
+                self.handle_order_data(order=self.buy_order, side='NEUTRAL BY SL FROM '+str(self.position_telegram))
 
             #if no actions with position, then pull up stoploss after price climbed over pinbar high + ATR
             elif np.sign(self.data.bench_returns.iloc[-1]) == -1 and (self.start_price>self.data.close.iloc[-1]):
@@ -228,8 +213,8 @@ class Trader():
 if __name__ == "__main__":
     print('-'*70)
     client = sf.setup_api_conn_binance_only()
-    bot = Trader(ticker='ADABUSD', size= 40, interval='1h', hist_period_hours=40, leverage=5, ma_interval=15, bb_interval=20, body_size =0.7, sl_coef=1.5, vol_coef = 1.25)
+    bot = Trader(ticker='ADABUSD', size= 100, interval='1h', hist_period_hours=40, leverage=5, ma_interval=15, bb_interval=20, body_size =0.7, sl_coef=1.5, vol_coef = 1.25)
     print('{} - done at: {} and price: {}'.format(bot.ticker, bot.run_date, bot.last_price))
-    if dt.datetime.now().hour % 1==0:
+    if dt.datetime.now().hour % 4==0:
         ts.send(conf=ts_conf, messages=[bot.ticker+' - listening - price : '+str(bot.last_price)])
 
