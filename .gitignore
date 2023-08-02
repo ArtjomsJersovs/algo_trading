@@ -15,8 +15,6 @@
 *.css
 *.Rd
 *.xlsx
-*.txt
-*.TXT
 *.ipynb
 *.cfg
 *.hdf5

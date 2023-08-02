@@ -1,0 +1,17 @@
+math
+os
+json
+time
+requests
+datetime
+urllib
+python-binance
+numpy
+pandas
+ta
+telegram_send==13.5
+dateutil
+subprocess
+matplotlib
+seaborn
+unicorn_binance_websocket_api
