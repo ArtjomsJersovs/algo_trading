@@ -1,10 +1,5 @@
-math
-os
-json
-time
 requests
-datetime
-urllib
+urllib.request
 python-binance
 numpy
 pandas
