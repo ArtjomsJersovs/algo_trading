@@ -1,5 +1,4 @@
 requests
-urllib.request
 python-binance
 numpy
 pandas
