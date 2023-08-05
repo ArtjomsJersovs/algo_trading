@@ -13,10 +13,9 @@ from binance.enums import HistoricalKlinesType
 from pandas.core.tools.datetimes import to_datetime
 from ta.volatility import average_true_range, BollingerBands
 import stored_functions as sf
-import telegram_send as ts  #13.5 working version
-#ts_conf=r'C:\Users\Administrator\Documents\algo_trading\telegram-send.conf'
+import telegram_send as ts  #13.15 working version for python-telegram-bot before telegram_send
 #ts_conf=r'C:\Users\HP\Documents\GitHub\algo_trading\telegram-send.conf'
-ts_conf=os.path.join(os.getcwd(),'telegram-send.conf')
+ts_conf='/home/ec2-user/algo_trading/telegram-send.conf'
 
 class Trader():
 
@@ -36,13 +35,11 @@ class Trader():
         self.test_order = 'none'
         self.leverage = leverage
         client.futures_change_leverage(symbol=ticker, leverage=leverage)
-        self.run_date = pd.to_datetime(dt.datetime.now())  
+        self.run_date = pd.to_datetime(dt.datetime.now())
         print(self.run_date)
         #-------------------
         #for server
-        #self.params_filename = f'C:/Users/Administrator/Documents/algo_trading/production/012_cron_one_bar/{self.ticker}_1h_params.csv'
-        #for local machine
-        self.params_filename = os.path.join(os.getcwd(), f'{self.ticker}_{self.interval_str}_params.csv')
+        self.params_filename = '/home/ec2-user/algo_trading/production/012_cron_one_bar/'+f'{self.ticker}_{self.interval_str}_params.csv'
         #*****************add strategy-specific attributes here******************
         self.ma_interval = ma_interval
         self.bb_interval = bb_interval
@@ -50,16 +47,16 @@ class Trader():
         self.sl_coef = sl_coef
         self.vol_coef = vol_coef
         self.start_price_telegram = 0
-        self.position_telegram = 0 
+        self.position_telegram = 0
         #************************************************************************
         #Read all params and logs
-        
+
         #Read main trade parameters
         if os.path.isfile(self.params_filename):
             self.params = pd.read_csv(self.params_filename)
         else:
             self.params = pd.DataFrame({'date':[self.run_date],'position':[0],'start_price':[0],'trailing_stop':[0]})
-            self.params.to_csv(self.params_filename, index = False) 
+            self.params.to_csv(self.params_filename, index = False)
         self.position = self.params.position.loc[0]
         self.trailing_stop = self.params.trailing_stop[0]
         self.start_price = self.params.start_price[0]
@@ -71,7 +68,7 @@ class Trader():
             self.data = self.get_historical_data().assign(order_price=np.nan, order_qty=np.nan,trade_size_usd=np.nan)
             self.define_strategy()
             self.execute_trades()
-        except Exception as e: 
+        except Exception as e:
             ts.send(conf=ts_conf,messages=[str(e)+'-'+self.ticker])
             print(str(e))
 
@@ -86,7 +83,7 @@ class Trader():
         print('historical data - success')
         return df
 
-    def define_strategy(self): 
+    def define_strategy(self):
         df = self.data.apply(pd.to_numeric).copy()
         #******************** define your strategy here ************************
         df['bench_returns'] = np.log(df.close.astype(float).div(df.close.astype(float).shift(1)))
@@ -103,7 +100,7 @@ class Trader():
         df['higher_close'] = np.where(df.close>df.close.shift(1),1,0)
         df['lower_close'] = np.where(df.close<df.close.shift(1),1,0)
         df['over_ma_volume'] = np.where(df.volume>(df.volume_ma * self.vol_coef),1,0)
-        
+
         df['rng'] = abs(df.high-df.low)
         df['rng_body'] = abs(df.open-df.close)
         df['body_size'] = np.where(df.rng_body.div(df.rng)>self.body_size,1,0)
@@ -111,25 +108,25 @@ class Trader():
         #***********************************************************************
         self.data = df.copy()
         print('calculate strategy - success')
-        
+
     def handle_order_data(self, order, side='LONG'):
-        
+
         self.data.loc[-1,('order_price')]= float(order['avgPrice'])
         self.data.loc[-1,('order_qty')]= float(order['executedQty'])
-        self.data.loc[-1,('trade_size_usd')] = float(order['cumQuote'])        
-        
+        self.data.loc[-1,('trade_size_usd')] = float(order['cumQuote'])
+
         self.params.loc[0,('position')] = self.position
         self.params.loc[0,('trailing_stop')] = self.trailing_stop
         self.params.loc[0,('start_price')] = self.start_price
         #prints
         self.params.to_csv(self.params_filename, index = False)
         self.report_trade(order, f"___________{self.ticker} GOING {side}___________")
-    
+
     def report_trade(self, order, text):
         print("\n" + 100* "-")
         print(text)
         print("Filled quantity: {} - at price: {}".format(self.data['order_qty'].iloc[-1],self.data['order_price'].iloc[-1]))
-        print(100 * "-" + "\n")  
+        print(100 * "-" + "\n")
         ts.send(conf=ts_conf, messages=[text+" price : "+str(round(float(order['avgPrice']),4))+' // Start price: '+str(round(float(self.start_price_telegram),4))])
 
     def execute_trades(self):
@@ -140,12 +137,12 @@ class Trader():
                     symbol=self.ticker,
                     type='MARKET',
                     side='BUY',
-                    newOrderRespType = 'RESULT',                    
+                    newOrderRespType = 'RESULT',
                     quantity=self.size
                 )
                 self.position = 1
                 self.trailing_stop = self.data.close.iloc[-1] - (self.data.ATR.iloc[-1]*self.sl_coef)
-                self.start_price = self.data.close.iloc[-1]  
+                self.start_price = self.data.close.iloc[-1]
                 self.handle_order_data(order=self.buy_order, side='LONG')
 
             elif (self.data.lower_high.iloc[-1]==1 and self.data.lower_close.iloc[-1]==1 and self.data.body_size.iloc[-1]==1 and self.data.over_ma_volume.iloc[-1]==1 and (self.data.bb_bbh.iloc[-1]>self.data.close.iloc[-1]) and (self.data.bb_bbl.iloc[-1]<self.data.close.iloc[-1])) or (self.test_order=='short'):
@@ -153,14 +150,14 @@ class Trader():
                     symbol=self.ticker,
                     type='MARKET',
                     side='SELL',
-                    newOrderRespType = 'RESULT',                    
+                    newOrderRespType = 'RESULT',
                     quantity=self.size
                 )
                 self.position = -1
                 self.trailing_stop = self.data.close.iloc[-1] + (self.data.ATR.iloc[-1]*self.sl_coef)
-                self.start_price = self.data.close.iloc[-1]  
-                self.handle_order_data(order=self.sell_order, side='SHORT')         
-            
+                self.start_price = self.data.close.iloc[-1]
+                self.handle_order_data(order=self.sell_order, side='SHORT')
+
         #CLOSE POSITIONS
         elif self.position == 1:
             #close all if price dropped under stoploss
@@ -181,11 +178,11 @@ class Trader():
 
             #if no actions with position, then pull up stoploss after price climbed over pinbar high + ATR
             elif np.sign(self.data.bench_returns.iloc[-1]) == 1 and (self.start_price<self.data.close.iloc[-1]):
-                self.trailing_stop = self.data.close.iloc[-1] - (self.data.ATR.iloc[-1]*self.sl_coef) 
+                self.trailing_stop = self.data.close.iloc[-1] - (self.data.ATR.iloc[-1]*self.sl_coef)
                 self.params.loc[0,('date')] = self.run_date
                 self.params.loc[0,('trailing_stop')] = self.trailing_stop
                 self.params.to_csv(self.params_filename, index=False)
-        
+
         elif self.position == -1:
             #close all if price dropped under stoploss
             if (self.trailing_stop < float(self.data.close.iloc[-1])) or (self.test_order=='short_sl'):
@@ -204,11 +201,11 @@ class Trader():
 
             #if no actions with position, then pull up stoploss after price climbed over pinbar high + ATR
             elif np.sign(self.data.bench_returns.iloc[-1]) == -1 and (self.start_price>self.data.close.iloc[-1]):
-                self.trailing_stop = self.data.close.iloc[-1] + (self.data.ATR.iloc[-1]*self.sl_coef)   
-                self.params.loc[0,('date')] = self.run_date 
+                self.trailing_stop = self.data.close.iloc[-1] + (self.data.ATR.iloc[-1]*self.sl_coef)
+                self.params.loc[0,('date')] = self.run_date
                 self.params.loc[0,('trailing_stop')] = self.trailing_stop
                 self.params.to_csv(self.params_filename, index=False)
-        
+
 
 if __name__ == "__main__":
     print('-'*70)
@@ -217,4 +214,3 @@ if __name__ == "__main__":
     print('{} - done at: {} and price: {}'.format(bot.ticker, bot.run_date, bot.last_price))
     if dt.datetime.now().hour % 4==0:
         ts.send(conf=ts_conf, messages=[bot.ticker+' - listening - price : '+str(bot.last_price)])
-
