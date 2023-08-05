@@ -193,9 +193,10 @@ class Trader():
                     newOrderRespType = 'RESULT',
                     quantity=float(client.futures_get_all_orders(symbol=self.ticker)[-1]['origQty'])
                 )
+                self.start_price_telegram = self.start_price
+                self.position_telegram = self.position
                 self.position = 0
                 self.trailing_stop = 0
-                self.start_price_telegram = self.start_price
                 self.start_price = 0
                 self.handle_order_data(order=self.buy_order, side='NEUTRAL BY SL FROM '+str(self.position_telegram))
 
